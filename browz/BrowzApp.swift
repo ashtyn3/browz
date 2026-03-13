@@ -9,6 +9,14 @@ struct BrowzApp: App {
     var body: some Scene {
         WindowGroup {
             BrowserWindowView(controller: controller)
+                .onOpenURL { url in
+                    guard url.scheme?.lowercased() == InternalRoute.scheme else { return }
+                    let urlString = url.absoluteString
+                    if InternalRoute.parse(urlString) == .settings {
+                        controller.openSettings()
+                    }
+                    // Add more routes here as you extend InternalRoute.
+                }
         }
         .commands {
             CommandMenu("Tabs") {
