@@ -202,6 +202,32 @@ struct BrowserWindowView: View {
             .ignoresSafeArea()
     }
 
+    // MARK: - Page loading indicator
+
+    private func pageLoadingProgressBar(tabID: UUID) -> some View {
+        let progress = store.tabProgress[tabID] ?? 0
+        let isLoading = store.loadingTabIDs.contains(tabID)
+        let visible = isLoading || (progress > 0 && progress < 1)
+        let tint = store.tabs.first(where: { $0.id == tabID })?.pageTint
+        let accent: Color = tint.map { Color(red: $0.r, green: $0.g, blue: $0.b) } ?? Color.accentColor
+
+        return GeometryReader { geo in
+            if visible {
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(accent.opacity(0.25))
+                        .frame(height: 3)
+                    Rectangle()
+                        .fill(accent)
+                        .frame(width: max(0, geo.size.width * progress), height: 3)
+                        .animation(.easeInOut(duration: 0.15), value: progress)
+                }
+            }
+        }
+        .frame(height: visible ? 3 : 0)
+        .animation(.easeInOut(duration: 0.2), value: visible)
+    }
+
     // MARK: - Content area (supports split view)
 
     private var contentArea: some View {
@@ -295,6 +321,8 @@ struct BrowserWindowView: View {
                 alignment: .bottom
             )
 
+            pageLoadingProgressBar(tabID: tab.id)
+
             // Webview content
             Group {
                 if InternalRoute.parse(tab.urlString) == .settings {
@@ -355,6 +383,7 @@ struct BrowserWindowView: View {
                     let isBlankStart = store.tabs.count == 1 && tab.urlString == "about:blank" && settings.showKeyboardShortcutHelperOnBlank
                     ZStack {
                         VStack(spacing: 0) {
+                            pageLoadingProgressBar(tabID: tab.id)
                             WebViewContainer(
                                 tab: tab,
                                 runtimeRegistry: controller.runtimeRegistry,

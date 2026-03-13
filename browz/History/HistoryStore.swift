@@ -50,6 +50,23 @@ final class HistoryStore: ObservableObject {
         try? FileManager.default.removeItem(at: Self.fileURL)
     }
 
+    /// Removes and returns the most recently added (front) entry. Used for "Reopen Last Closed Tab".
+    func popMostRecentEntry() -> HistoryEntry? {
+        guard !entries.isEmpty else { return nil }
+        let entry = entries.removeFirst()
+        scheduleSave()
+        return entry
+    }
+
+    /// Puts an entry back at the front (e.g. when reopen is skipped because that URL is already open).
+    func prependEntry(_ entry: HistoryEntry) {
+        entries.insert(entry, at: 0)
+        if entries.count > maxEntries {
+            entries = Array(entries.prefix(maxEntries))
+        }
+        scheduleSave()
+    }
+
     // MARK: - Search
 
     func search(query: String, limit: Int = 7) -> [HistoryEntry] {

@@ -44,6 +44,8 @@ struct BrowzApp: App {
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Close Tab") { controller.closeSelectedTab() }
                     .keyboardShortcut("w", modifiers: .command)
+                Button("Reopen Last Closed Tab") { controller.reopenLastClosedTab() }
+                    .keyboardShortcut("t", modifiers: [.command, .shift])
 
                 Divider()
 
@@ -312,6 +314,16 @@ final class BrowserController: ObservableObject {
     func closeSelectedTab() {
         guard let id = store.selectedTabID else { return }
         closeTab(id)
+    }
+
+    func reopenLastClosedTab() {
+        guard let entry = historyStore.popMostRecentEntry() else { return }
+        let alreadyOpen = store.tabs.contains { $0.urlString == entry.urlString }
+        if alreadyOpen {
+            historyStore.prependEntry(entry)
+            return
+        }
+        newTab(input: entry.urlString)
     }
 
     func selectTab(_ id: UUID) {
