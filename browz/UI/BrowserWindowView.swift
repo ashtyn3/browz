@@ -269,6 +269,7 @@ struct BrowserWindowView: View {
             .padding(.vertical, 3)
             .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(stroke, lineWidth: 1))
+            .hoverElevated(cornerRadius: 6)
         }
         .buttonStyle(.plain)
     }
@@ -342,6 +343,7 @@ struct BrowserWindowView: View {
                             .foregroundStyle(labelSecondary)
                             .frame(width: 18, height: 18)
                             .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 5))
+                            .hoverElevated(cornerRadius: 5, hoverOpacity: 0.10)
                     }
                     .buttonStyle(.plain)
                 }
@@ -356,6 +358,7 @@ struct BrowserWindowView: View {
                         .foregroundStyle(labelSecondary)
                         .frame(width: 18, height: 18)
                         .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 5))
+                        .hoverElevated(cornerRadius: 5, hoverOpacity: 0.10)
                 }
                 .buttonStyle(.plain)
             }
@@ -376,7 +379,7 @@ struct BrowserWindowView: View {
 
             // Webview content
             Group {
-                if tab.urlString == "aob://settings" {
+                if InternalRoute.parse(tab.urlString) == .settings {
                     SettingsTabView()
                 } else {
                     VStack(spacing: 0) {
@@ -427,7 +430,7 @@ struct BrowserWindowView: View {
     private var singlePane: some View {
         Group {
             if let tab = store.selectedTab {
-                if tab.urlString == "aob://settings" {
+                if InternalRoute.parse(tab.urlString) == .settings {
                     SettingsTabView()
                         .styledPane(stroke: stroke)
                 } else {
@@ -562,6 +565,7 @@ struct BrowserWindowView: View {
         .buttonStyle(.plain)
         .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(stroke, lineWidth: 1))
+        .hoverElevated(cornerRadius: 7)
     }
 
     private func kbdHint(_ label: String) -> some View {

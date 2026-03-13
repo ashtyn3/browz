@@ -111,7 +111,7 @@ final class BrowserSettings: ObservableObject {
         guard !trimmed.isEmpty else { return nil }
 
         // Internal browser pages — rendered natively, never loaded into WebKit.
-        if let url = URL(string: trimmed), url.scheme == "aob" {
+        if InternalRoute.isInternalURL(trimmed) {
             return nil
         }
 

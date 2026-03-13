@@ -237,6 +237,7 @@ struct TabFuzzyFinder: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { onCreate(query) }
+        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.10)
     }
 
     // MARK: - Tab row
@@ -304,6 +305,7 @@ struct TabFuzzyFinder: View {
         .contentShape(Rectangle())
         .onHover { hoveredTabID = $0 ? tab.id : nil }
         .onTapGesture { onSelect(tab.id) }
+        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.10)
     }
 
     // MARK: - Bookmark row
@@ -345,6 +347,7 @@ struct TabFuzzyFinder: View {
         .contentShape(Rectangle())
         .onHover { hoveredHistoryID = $0 ? entry.id : nil }
         .onTapGesture { onCreate(entry.urlString) }
+        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.08)
     }
 
     // MARK: - History row
@@ -389,6 +392,7 @@ struct TabFuzzyFinder: View {
         .contentShape(Rectangle())
         .onHover { hoveredHistoryID = $0 ? entry.id : nil }
         .onTapGesture { onCreate(entry.urlString) }
+        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.08)
     }
 
     private func rowBg(isActive: Bool, isSel: Bool, isHovered: Bool) -> Color {

@@ -15,7 +15,7 @@ final class SuggestionService: ObservableObject {
         guard !trimmed.isEmpty,
               !trimmed.contains("://"),
               !trimmed.hasPrefix("about:"),
-              !trimmed.hasPrefix("aob:") else {
+              !InternalRoute.isInternalURL(trimmed) else {
             suggestions = []
             return
         }

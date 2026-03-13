@@ -18,7 +18,15 @@ final class TabSessionPersistence {
 
         do {
             let data = try Data(contentsOf: sessionURL)
-            return try decoder.decode(PersistedTabSession.self, from: data)
+            var session = try decoder.decode(PersistedTabSession.self, from: data)
+            session.tabs = session.tabs.map { tab in
+                var t = tab
+                if let route = InternalRoute.parse(tab.urlString), route.urlString != tab.urlString {
+                    t.urlString = route.urlString
+                }
+                return t
+            }
+            return session
         } catch {
             return nil
         }

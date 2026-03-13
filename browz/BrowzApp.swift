@@ -247,11 +247,12 @@ final class BrowserController: ObservableObject {
     func dismissNavigationSurface() { store.isNavigationSurfacePresented = false }
 
     func openSettings() {
-        if let existing = store.tabs.first(where: { $0.urlString == "aob://settings" }) {
+        let settingsURL = InternalRoute.settings.urlString
+        if let existing = store.tabs.first(where: { $0.urlString == settingsURL }) {
             store.selectTab(existing.id)
         } else {
-            let tab = store.createTab(initialInput: "aob://settings", select: true)
-            store.updateNavigation(id: tab.id, title: "Settings", url: nil)
+            let tab = store.createTab(initialInput: settingsURL, select: true)
+            store.updateNavigation(id: tab.id, title: InternalRoute.settings.title, url: nil)
         }
         dismissFinder(); dismissNavigationSurface()
     }
@@ -300,7 +301,7 @@ final class BrowserController: ObservableObject {
 
     func navigateSelected(to input: String) {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed == "aob://settings" { openSettings(); return }
+        if InternalRoute.parse(trimmed) == .settings { openSettings(); return }
 
         guard let tab = store.activeTab else { return }
         store.updateAddressInput(trimmed, for: tab.id)
