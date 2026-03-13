@@ -27,7 +27,7 @@ struct WorkspaceManagerView: View {
             createRow
         }
         .frame(width: 360)
-        .background(Color.white.opacity(0.87))
+        .background(Color.white.opacity(0.80))
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(

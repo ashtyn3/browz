@@ -24,6 +24,9 @@ struct TabFuzzyFinder: View {
     let onClose: (UUID) -> Void
     let onTogglePin: (UUID) -> Void
     let onCreate: (String) -> Void
+    /// Optional callback to reorder tabs in the owning store.
+    /// The first ID is the dragged tab, the second is the tab it should appear before.
+    let onMoveTab: ((UUID, UUID) -> Void)?
 
     private let palette: FinderPalette
 
@@ -31,6 +34,9 @@ struct TabFuzzyFinder: View {
     @State private var hoveredTabID: UUID? = nil
     @State private var selectedIndex: Int? = nil
     @State private var keyMonitor: Any? = nil
+    @State private var draggingTabID: UUID? = nil
+    @State private var dragOrder: [UUID]? = nil
+    @State private var reorderHoveredTabID: UUID? = nil
     @FocusState private var isFocused: Bool
 
     private static let notifNext = Notification.Name("browz.finder.selectNext")
@@ -46,7 +52,8 @@ struct TabFuzzyFinder: View {
         onClose: @escaping (UUID) -> Void,
         onTogglePin: @escaping (UUID) -> Void,
         onCreate: @escaping (String) -> Void,
-        pageTint: PageTint? = nil
+        pageTint: PageTint? = nil,
+        onMoveTab: ((UUID, UUID) -> Void)? = nil
     ) {
         self.tabs = tabs
         self.selectedTabID = selectedTabID
@@ -57,10 +64,14 @@ struct TabFuzzyFinder: View {
         self.onClose = onClose
         self.onTogglePin = onTogglePin
         self.onCreate = onCreate
+        self.onMoveTab = onMoveTab
         self._query = State(initialValue: "")
         self._hoveredTabID = State(initialValue: nil)
         self._selectedIndex = State(initialValue: nil)
         self._keyMonitor = State(initialValue: nil)
+        self._draggingTabID = State(initialValue: nil)
+        self._dragOrder = State(initialValue: nil)
+        self._reorderHoveredTabID = State(initialValue: nil)
         self._isFocused = FocusState()
         self.palette = FinderPalette.make(pageTint: pageTint)
     }
@@ -68,13 +79,24 @@ struct TabFuzzyFinder: View {
     // MARK: - Computed lists
 
     private var rankedTabs: [TabState] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // When there's no search query, keep the order identical to the tab strip
+        // (or the in-progress drag order) so reordering feels predictable.
+        guard !trimmed.isEmpty else {
+            if let dragOrder {
+                let byID = Dictionary(uniqueKeysWithValues: tabs.map { ($0.id, $0) })
+                return dragOrder.compactMap { byID[$0] }
+            }
+            return tabs
+        }
+
         let scored: [(TabState, Int)] = tabs.map { tab in
             let haystack = "\(tab.title) \(tab.urlString)"
-            let base = FuzzyMatch.score(query: query, candidate: haystack)
+            let base = FuzzyMatch.score(query: trimmed, candidate: haystack)
             let recencyBonus = Int(Date.now.timeIntervalSince(tab.lastAccessedAt) * -0.01)
             return (tab, base + recencyBonus)
         }
-        let filtered = scored.filter { query.isEmpty || $0.1 > 0 }
+        let filtered = scored.filter { $0.1 > 0 }
         return filtered.sorted { lhs, rhs in
             lhs.1 != rhs.1 ? lhs.1 > rhs.1 : lhs.0.lastAccessedAt > rhs.0.lastAccessedAt
         }.map(\.0)
@@ -113,7 +135,7 @@ struct TabFuzzyFinder: View {
             footer
         }
         .frame(width: 580)
-        .background(Color.white.opacity(0.87))
+        .background(Color.white.opacity(0.80))
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -164,7 +186,11 @@ struct TabFuzzyFinder: View {
                 .foregroundStyle(palette.labelPrimary)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
-                .onChange(of: query) { selectedIndex = nil }
+                .onChange(of: query) {
+                    selectedIndex = nil
+                    draggingTabID = nil
+                    dragOrder = nil
+                }
                 .onSubmit { activateSelected() }
                 .onKeyPress(phases: .down) { press in
                     handleNavKey(press)
@@ -196,27 +222,93 @@ struct TabFuzzyFinder: View {
 
     private var resultsList: some View {
         let tabList   = rankedTabs
-        let tabOffset = 0
         let rowCount  = tabList.isEmpty && !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : tabList.count
         let contentHeight = CGFloat(rowCount) * Self.rowHeight + Self.listVerticalPadding
         let listHeight = min(contentHeight, Self.listMaxHeight)
+        let canReorder = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && onMoveTab != nil
 
         return ScrollView {
             LazyVStack(spacing: 2) {
                 if !tabList.isEmpty {
                     ForEach(Array(tabList.enumerated()), id: \.element.id) { i, tab in
-                        tabRow(tab, listIndex: tabOffset + i)
+                        tabRow(tab, listIndex: i, canReorder: canReorder)
                     }
                 }
-
                 if tabList.isEmpty && !query.isEmpty {
                     openURLRow
                 }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 8)
+            // Spring-animate rows into new positions as drag order changes.
+            .animation(.spring(response: 0.28, dampingFraction: 0.82), value: dragOrder)
+            // Single gesture on the whole container — never invalidated by row reordering.
+            .gesture(canReorder ? listReorderGesture : nil)
         }
         .frame(height: listHeight)
+    }
+
+    // MARK: - Drag-to-reorder (container-level gesture)
+
+    /// Row height + LazyVStack row spacing = one slot.
+    private static let slotHeight: CGFloat = rowHeight + 2
+
+    /// Convert a Y coordinate (local to the LazyVStack including its padding) into a row index.
+    private func rowSlot(_ y: CGFloat, count: Int) -> Int {
+        let adjusted = y - 8                     // subtract top padding
+        let raw = Int(adjusted / Self.slotHeight)
+        return min(max(raw, 0), count - 1)
+    }
+
+    private var listReorderGesture: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .local)
+            .onChanged { value in
+                let current = rankedTabs    // always reads current dragOrder when set
+                guard !current.isEmpty else { return }
+
+                if draggingTabID == nil {
+                    // First event — pick up the row under the finger.
+                    let idx = rowSlot(value.startLocation.y, count: current.count)
+                    draggingTabID = current[idx].id
+                    dragOrder     = current.map(\.id)
+                    NSCursor.closedHand.push()
+                }
+
+                guard let dragID = draggingTabID,
+                      var order  = dragOrder else { return }
+
+                let targetIdx   = rowSlot(value.location.y, count: order.count)
+                guard let fromIdx = order.firstIndex(of: dragID),
+                      targetIdx != fromIdx else { return }
+
+                order.remove(at: fromIdx)
+                order.insert(dragID, at: targetIdx)
+                dragOrder = order
+            }
+            .onEnded { _ in
+                commitDragOrder()
+            }
+    }
+
+    private func commitDragOrder() {
+        defer {
+            draggingTabID = nil
+            dragOrder     = nil
+            NSCursor.pop()   // restore open-hand / arrow
+        }
+        guard let onMoveTab, let finalOrder = dragOrder else { return }
+
+        // Walk left-to-right, calling moveTab for each element not yet in place.
+        // Simulate the same moves on a local copy so sibling IDs stay correct.
+        var sim = tabs.map(\.id)
+        for (i, finalID) in finalOrder.enumerated() {
+            guard let fromIdx = sim.firstIndex(of: finalID), fromIdx != i else { continue }
+            sim.remove(at: fromIdx)
+            sim.insert(finalID, at: i)
+            // "move finalID before the tab currently sitting at i+1"
+            guard i + 1 < sim.count else { continue }
+            onMoveTab(finalID, sim[i + 1])
+        }
     }
 
     private func sectionLabel(_ text: String) -> some View {
@@ -266,21 +358,34 @@ struct TabFuzzyFinder: View {
 
     // MARK: - Tab row
 
-    private func tabRow(_ tab: TabState, listIndex: Int) -> some View {
-        let isActive   = tab.id == selectedTabID
-        let isHovered  = hoveredTabID == tab.id
-        let isSel      = selectedIndex == listIndex
-        let rowAccent  = tab.isPrivate ? privateColor : accentBar
+    private func tabRow(_ tab: TabState, listIndex: Int, canReorder: Bool = false) -> some View {
+        let isActive        = tab.id == selectedTabID
+        let isHovered       = hoveredTabID == tab.id
+        let isSel           = selectedIndex == listIndex
+        let isDragging      = draggingTabID == tab.id
+        let anyDragging     = draggingTabID != nil
+        let showHandle      = canReorder && isHovered && !anyDragging
+        let rowAccent       = tab.isPrivate ? privateColor : accentBar
 
         return HStack(spacing: 12) {
+            // Drag handle / favicon slot
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isActive ? rowAccent.opacity(0.10) : palette.input)
                     .frame(width: 32, height: 32)
-                Image(systemName: tab.isPrivate ? "shield.fill" : "globe")
-                    .font(.system(size: 13))
-                    .foregroundStyle(isActive ? rowAccent : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary))
+                if showHandle {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(palette.labelTertiary)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                } else {
+                    Image(systemName: tab.isPrivate ? "shield.fill" : "globe")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isActive ? rowAccent : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary))
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                }
             }
+            .animation(.easeInOut(duration: 0.15), value: showHandle)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(tab.title)
@@ -306,7 +411,7 @@ struct TabFuzzyFinder: View {
                         .font(.system(size: 10))
                         .foregroundStyle(palette.labelTertiary)
                 }
-                if isHovered || isActive || isSel {
+                if (isHovered || isActive || isSel) && !anyDragging {
                     rowAction(icon: tab.isPinned ? "pin.slash" : "pin") {
                         onTogglePin(tab.id)
                     }
@@ -320,16 +425,37 @@ struct TabFuzzyFinder: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(rowBg(isActive: isActive, isSel: isSel, isHovered: isHovered))
+                .fill(isDragging
+                    ? Color.white.opacity(0.92)
+                    : rowBg(isActive: isActive, isSel: isSel, isHovered: isHovered))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isActive ? rowAccent.opacity(0.18) : Color.clear, lineWidth: 1)
+                .strokeBorder(
+                    isDragging
+                        ? Color.black.opacity(0.06)
+                        : (isActive ? rowAccent.opacity(0.18) : Color.clear),
+                    lineWidth: 1
+                )
         )
+        .shadow(
+            color: isDragging ? .black.opacity(0.10) : .clear,
+            radius: isDragging ? 12 : 0,
+            y: isDragging ? 4 : 0
+        )
+        .scaleEffect(isDragging ? 1.02 : 1.0)
+        .opacity(anyDragging && !isDragging ? 0.75 : 1.0)
+        .animation(.spring(response: 0.22, dampingFraction: 0.75), value: isDragging)
         .contentShape(Rectangle())
-        .onHover { hoveredTabID = $0 ? tab.id : nil }
+        .onHover { over in
+            hoveredTabID = over ? tab.id : nil
+            if canReorder {
+                if over { NSCursor.openHand.push() } else { NSCursor.pop() }
+            }
+        }
         .onTapGesture { onSelect(tab.id) }
-        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.10)
+        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: isDragging ? 0.0 : 0.10)
+        .zIndex(isDragging ? 1 : 0)
     }
 
     private func rowBg(isActive: Bool, isSel: Bool, isHovered: Bool) -> Color {
@@ -379,7 +505,7 @@ struct TabFuzzyFinder: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.87))
+        .background(Color.white.opacity(0.80))
         .overlay(
             Rectangle()
                 .fill(Color.white.opacity(0.35))

@@ -151,7 +151,10 @@ struct BrowserWindowView: View {
                         controller.newTab(input: query)
                         controller.dismissFinder()
                     },
-                    pageTint: store.activeTabPageTint
+                    pageTint: store.activeTabPageTint,
+                    onMoveTab: { sourceID, targetID in
+                        controller.store.moveTab(sourceID, before: targetID)
+                    }
                 )
             }
         }
@@ -436,7 +439,7 @@ struct BrowserWindowView: View {
     private var navigationSurface: some View {
         navigationSurfaceContent
             .frame(maxWidth: 720)
-            .background(Color.white.opacity(0.87))
+            .background(Color.white.opacity(0.80))
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)

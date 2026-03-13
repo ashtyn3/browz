@@ -72,7 +72,7 @@ struct HistoryFuzzyFinder: View {
             footer
         }
         .frame(width: 580)
-        .background(Color.white.opacity(0.87))
+        .background(Color.white.opacity(0.80))
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -254,7 +254,7 @@ struct HistoryFuzzyFinder: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.87))
+        .background(Color.white.opacity(0.80))
         .overlay(
             Rectangle()
                 .fill(Color.white.opacity(0.35))

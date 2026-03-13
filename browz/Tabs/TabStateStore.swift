@@ -126,6 +126,18 @@ final class TabStateStore: ObservableObject {
         tabs[index].isPinned.toggle()
     }
 
+    /// Move `id` so it appears immediately before `siblingID` in the tab strip.
+    /// If either tab can't be found, the operation is a no-op.
+    func moveTab(_ id: UUID, before siblingID: UUID) {
+        guard id != siblingID,
+              let fromIndex = tabs.firstIndex(where: { $0.id == id }),
+              let siblingIndex = tabs.firstIndex(where: { $0.id == siblingID }) else { return }
+
+        let tab = tabs.remove(at: fromIndex)
+        let adjustedSiblingIndex = fromIndex < siblingIndex ? siblingIndex - 1 : siblingIndex
+        tabs.insert(tab, at: adjustedSiblingIndex)
+    }
+
     func setLifecycle(_ lifecycle: TabLifecycle, for id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         tabs[index].lifecycle = lifecycle
