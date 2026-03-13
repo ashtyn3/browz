@@ -38,9 +38,16 @@ final class TabRuntimeRegistry {
             forKey: "developerExtrasEnabled"
         )
 
-        // Use the system WebKit/Safari user agent without additional spoofing.
-        // This avoids mismatches between reported capabilities and the actual
-        // engine, which can cause Google sign-in and passkeys to misbehave.
+        // Nudge sites (notably Google) to serve modern layouts without fully
+        // spoofing another browser's user agent. We append a Safari-style token
+        // while still letting WebKit generate the base UA string, so capability
+        // detection stays accurate and Google sign-in/passkeys remain reliable.
+        if #available(macOS 13, *) {
+            if configuration.applicationNameForUserAgent == nil {
+                configuration.applicationNameForUserAgent = "Version/17.4 Safari/605.1.15"
+            }
+        }
+
         let webView = ContextMenuWebView(frame: .zero, configuration: configuration)
         let relay = WebViewNavigationRelay(
             tabID: tab.id,
