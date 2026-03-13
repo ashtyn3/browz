@@ -1,22 +1,12 @@
 import SwiftUI
 import AppKit
 
-// Reuse same palette as TabFuzzyFinder for consistent menu style.
-private let paletteBg       = Color.white
-private let paletteInput    = Color(red: 0.96, green: 0.96, blue: 0.97)
-private let paletteStroke  = Color.black.opacity(0.08)
-private let paletteDivider  = Color.black.opacity(0.06)
-private let rowHover        = Color(red: 0.95, green: 0.95, blue: 0.96)
-private let rowSelected     = Color(red: 0.92, green: 0.92, blue: 0.94)
-private let labelPrimary    = Color(red: 0.08, green: 0.08, blue: 0.10)
-private let labelSecondary  = Color(red: 0.08, green: 0.08, blue: 0.10).opacity(0.45)
-private let labelTertiary   = Color(red: 0.08, green: 0.08, blue: 0.10).opacity(0.28)
-private let iconTint        = Color(red: 0.40, green: 0.40, blue: 0.44)
-
 struct HistoryFuzzyFinder: View {
     let historyStore: HistoryStore
     var headerLabel: String? = nil
     let onCreate: (String) -> Void
+
+    private let palette: FinderPalette
 
     @State private var query: String = ""
     @State private var hoveredID: UUID? = nil
@@ -26,6 +16,23 @@ struct HistoryFuzzyFinder: View {
 
     private static let notifNext = Notification.Name("browz.historyFinder.selectNext")
     private static let notifPrev = Notification.Name("browz.historyFinder.selectPrev")
+
+    init(
+        historyStore: HistoryStore,
+        headerLabel: String? = nil,
+        pageTint: PageTint? = nil,
+        onCreate: @escaping (String) -> Void
+    ) {
+        self.historyStore = historyStore
+        self.headerLabel = headerLabel
+        self.onCreate = onCreate
+        self._query = State(initialValue: "")
+        self._hoveredID = State(initialValue: nil)
+        self._selectedIndex = State(initialValue: nil)
+        self._keyMonitor = State(initialValue: nil)
+        self._isFocused = FocusState()
+        self.palette = FinderPalette.make(pageTint: pageTint)
+    }
 
     private var results: [HistoryEntry] {
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -48,28 +55,29 @@ struct HistoryFuzzyFinder: View {
                 HStack {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(labelSecondary)
+                        .foregroundStyle(palette.labelSecondary)
                     Text(label)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(labelSecondary)
+                        .foregroundStyle(palette.labelSecondary)
                     Spacer()
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)
                 .background(Color.black.opacity(0.025))
-                Divider().overlay(paletteDivider)
+                Divider().overlay(palette.divider)
             }
             searchBar
-            Divider().overlay(paletteDivider)
+            Divider().overlay(palette.divider)
             resultsList
             footer
         }
         .frame(width: 580)
-        .background(paletteBg)
+        .background(Color.white.opacity(0.87))
+        .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(paletteStroke, lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
@@ -105,12 +113,12 @@ struct HistoryFuzzyFinder: View {
         HStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(iconTint)
+                .foregroundStyle(palette.iconTint)
                 .frame(width: 20)
 
             TextField("Search history…", text: $query)
                 .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(labelPrimary)
+                .foregroundStyle(palette.labelPrimary)
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .onChange(of: query) { selectedIndex = nil }
@@ -124,7 +132,7 @@ struct HistoryFuzzyFinder: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(labelTertiary)
+                        .foregroundStyle(palette.labelTertiary)
                 }
                 .buttonStyle(.plain)
             }
@@ -156,21 +164,21 @@ struct HistoryFuzzyFinder: View {
         return HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(paletteInput)
+                    .fill(palette.input)
                     .frame(width: 32, height: 32)
                 Image(systemName: "clock")
                     .font(.system(size: 12))
-                    .foregroundStyle(labelTertiary)
+                    .foregroundStyle(palette.labelTertiary)
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(labelPrimary)
+                    .foregroundStyle(palette.labelPrimary)
                     .lineLimit(1)
                 Text(entry.urlString)
                     .font(.system(size: 11))
-                    .foregroundStyle(labelSecondary)
+                    .foregroundStyle(palette.labelSecondary)
                     .lineLimit(1)
             }
 
@@ -181,7 +189,7 @@ struct HistoryFuzzyFinder: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSel ? rowSelected : (isHovered ? rowHover : Color.clear))
+                .fill(isSel ? palette.rowSelected : (isHovered ? palette.rowHover : Color.clear))
         )
         .contentShape(Rectangle())
         .onHover { hoveredID = $0 ? entry.id : nil }
@@ -196,19 +204,19 @@ struct HistoryFuzzyFinder: View {
         return HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(paletteInput)
+                    .fill(palette.input)
                     .frame(width: 32, height: 32)
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(iconTint)
+                    .foregroundStyle(palette.iconTint)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Search web in new tab")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(labelPrimary)
+                    .foregroundStyle(palette.labelPrimary)
                 Text(query)
                     .font(.system(size: 11))
-                    .foregroundStyle(labelSecondary)
+                    .foregroundStyle(palette.labelSecondary)
                     .lineLimit(1)
             }
             Spacer()
@@ -218,7 +226,7 @@ struct HistoryFuzzyFinder: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isSelected ? rowSelected : rowHover)
+                .fill(isSelected ? palette.rowSelected : palette.rowHover)
         )
         .contentShape(Rectangle())
         .onTapGesture { onCreate(query) }
@@ -231,25 +239,25 @@ struct HistoryFuzzyFinder: View {
                 kbdChip("↵")
                 Text("open in new tab")
                     .font(.system(size: 10))
-                    .foregroundStyle(labelTertiary)
+                    .foregroundStyle(palette.labelTertiary)
             }
             HStack(spacing: 4) {
                 kbdChip("^N/P")
                 Text("navigate")
                     .font(.system(size: 10))
-                    .foregroundStyle(labelTertiary)
+                    .foregroundStyle(palette.labelTertiary)
             }
             Spacer()
             Text("\(historyStore.entries.count) in history")
                 .font(.system(size: 10))
-                .foregroundStyle(labelTertiary)
+                .foregroundStyle(palette.labelTertiary)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .background(Color(red: 0.97, green: 0.97, blue: 0.98))
+        .background(Color.white.opacity(0.87))
         .overlay(
             Rectangle()
-                .fill(paletteDivider)
+                .fill(Color.white.opacity(0.35))
                 .frame(height: 1),
             alignment: .top
         )
@@ -258,7 +266,7 @@ struct HistoryFuzzyFinder: View {
     private func kbdChip(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundStyle(labelSecondary)
+            .foregroundStyle(palette.labelSecondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(
@@ -266,7 +274,7 @@ struct HistoryFuzzyFinder: View {
                     .fill(Color.white)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .strokeBorder(paletteStroke, lineWidth: 1)
+                            .strokeBorder(palette.stroke, lineWidth: 1)
                     )
             )
     }

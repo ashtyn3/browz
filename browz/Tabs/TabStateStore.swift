@@ -42,6 +42,11 @@ final class TabStateStore: ObservableObject {
         return tabs.first(where: { $0.id == id })
     }
 
+    /// Convenience accessor for the currently active tab's page tint.
+    var activeTabPageTint: PageTint? {
+        activeTab?.pageTint
+    }
+
     /// Tabs visible in the current workspace filter.
     var visibleTabs: [TabState] {
         guard let wsID = activeWorkspaceID else { return tabs }
@@ -124,6 +129,11 @@ final class TabStateStore: ObservableObject {
     func setLifecycle(_ lifecycle: TabLifecycle, for id: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
         tabs[index].lifecycle = lifecycle
+    }
+
+    func setPageTint(_ tint: PageTint?, for id: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == id }) else { return }
+        tabs[index].pageTint = tint
     }
 
     func markTabAsActive(_ id: UUID) {

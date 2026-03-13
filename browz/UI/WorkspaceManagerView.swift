@@ -8,10 +8,15 @@ struct WorkspaceManagerView: View {
     @State private var newEmoji = "🌐"
     @State private var editingID: UUID? = nil
 
-    private let bg    = Color.white
-    private let row   = Color(red: 0.96, green: 0.96, blue: 0.97)
-    private let label = Color(red: 0.08, green: 0.08, blue: 0.10)
-    private let sec   = Color(red: 0.08, green: 0.08, blue: 0.10).opacity(0.45)
+    private let palette: FinderPalette
+
+    init(store: WorkspaceStore, pageTint: PageTint? = nil) {
+        self.store = store
+        self._newName = State(initialValue: "")
+        self._newEmoji = State(initialValue: "🌐")
+        self._editingID = State(initialValue: nil)
+        self.palette = FinderPalette.make(pageTint: pageTint)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -22,21 +27,27 @@ struct WorkspaceManagerView: View {
             createRow
         }
         .frame(width: 360)
-        .background(bg)
+        .background(Color.white.opacity(0.87))
+        .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 24, y: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
+        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
     }
 
     private var header: some View {
         HStack {
             Text("Workspaces")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(label)
+                    .foregroundStyle(palette.labelPrimary)
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(sec)
+                        .foregroundStyle(palette.labelSecondary)
                     .frame(width: 20, height: 20)
                     .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
             }
@@ -68,12 +79,12 @@ struct WorkspaceManagerView: View {
         HStack(spacing: 10) {
             Text(emoji).font(.system(size: 16))
                 .frame(width: 30, height: 30)
-                .background(isActive ? Color.black.opacity(0.07) : row,
+                .background(isActive ? Color.black.opacity(0.07) : palette.input,
                              in: RoundedRectangle(cornerRadius: 8))
 
             Text(name)
                 .font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                .foregroundStyle(label)
+                .foregroundStyle(palette.labelPrimary)
 
             Spacer()
 
@@ -89,7 +100,7 @@ struct WorkspaceManagerView: View {
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
-                        .foregroundStyle(sec)
+                        .foregroundStyle(palette.labelSecondary)
                         .frame(width: 24, height: 24)
                         .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
                 }
@@ -113,7 +124,7 @@ struct WorkspaceManagerView: View {
         HStack(spacing: 8) {
             TextField("＋ New workspace", text: $newName)
                 .font(.system(size: 13))
-                .foregroundStyle(label)
+                .foregroundStyle(palette.labelPrimary)
                 .textFieldStyle(.plain)
                 .onSubmit { createWorkspace() }
 

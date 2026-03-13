@@ -214,6 +214,10 @@ final class BrowserController: ObservableObject {
         runtimeRegistry.onDialogRequest = { [weak dialogPresenter] request in
             dialogPresenter?.present(request)
         }
+        runtimeRegistry.onPageTintChange = { [weak self] tabID, tint in
+            // If sampling fails, keep the UI neutral by clearing the tint.
+            self?.store.setPageTint(tint, for: tabID)
+        }
 
         store.bootstrap(with: persistence.load())
         bindPersistence()

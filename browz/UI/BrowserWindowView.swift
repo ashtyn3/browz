@@ -49,52 +49,21 @@ struct BrowserWindowView: View {
                         }
                     }
             }
-        }
-        .sheet(isPresented: $store.isFinderPresented) {
-            if store.splitPickerPending {
-                TabFuzzyFinder(
-                    tabs: store.visibleTabs.filter { $0.id != store.selectedTabID },
-                    selectedTabID: store.splitTabID,
-                    historyStore: controller.historyStore,
-                    bookmarkStore: controller.bookmarkStore,
-                    headerLabel: "Choose tab for split pane",
-                    onSelect: { controller.setSplitTab($0) },
-                    onClose: { _ in },
-                    onTogglePin: { _ in },
-                    onCreate: { query in
-                        let tab = controller.store.createTab(initialInput: query)
-                        controller.setSplitTab(tab.id)
-                        controller.dismissFinder()
-                    }
-                )
-                .onDisappear { store.splitPickerPending = false }
-            } else {
-                TabFuzzyFinder(
-                    tabs: store.visibleTabs,
-                    selectedTabID: store.selectedTabID,
-                    historyStore: controller.historyStore,
-                    bookmarkStore: controller.bookmarkStore,
-                    onSelect: { controller.selectTab($0) },
-                    onClose: { controller.closeTab($0) },
-                    onTogglePin: { controller.togglePin($0) },
-                    onCreate: { query in
-                        controller.newTab(input: query)
-                        controller.dismissFinder()
-                    }
-                )
+
+            // Tab finder (Cmd+K) and history finder as in-window overlays — same layer as nav, so they get true liquid glass over the tinted window.
+            if store.isFinderPresented {
+                finderOverlay
+            }
+            if store.isHistoryFinderPresented {
+                historyFinderOverlay
             }
         }
         .sheet(isPresented: $showWorkspaceManager) {
-            WorkspaceManagerView(store: workspaceStore)
-        }
-        .sheet(isPresented: $store.isHistoryFinderPresented) {
-            HistoryFuzzyFinder(
-                historyStore: controller.historyStore,
-                onCreate: { input in
-                    controller.newTab(input: input)
-                    controller.dismissHistoryFinder()
-                }
-            )
+            ZStack {
+                sheetTintFill
+                WorkspaceManagerView(store: workspaceStore, pageTint: store.activeTabPageTint)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: store.selectedTabID) {
             addressInput = store.activeTab?.urlString ?? ""
@@ -131,6 +100,7 @@ struct BrowserWindowView: View {
         .overlay {
             JSDialogOverlay(presenter: dialogPresenter).zIndex(100)
         }
+        .background(windowTintBackground)
         .background(.ultraThinMaterial)
         .background(
             WindowCloseInterceptor {
@@ -141,9 +111,96 @@ struct BrowserWindowView: View {
         .frame(minWidth: 980, minHeight: 680)
     }
 
+    // MARK: - In-window finder overlays (liquid glass over tinted window)
+
+    private var finderOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { controller.dismissFinder() }
+
+            if store.splitPickerPending {
+                TabFuzzyFinder(
+                    tabs: store.visibleTabs.filter { $0.id != store.selectedTabID },
+                    selectedTabID: store.splitTabID,
+                    historyStore: controller.historyStore,
+                    bookmarkStore: controller.bookmarkStore,
+                    headerLabel: "Choose tab for split pane",
+                    onSelect: { controller.setSplitTab($0) },
+                    onClose: { _ in },
+                    onTogglePin: { _ in },
+                    onCreate: { query in
+                        let tab = controller.store.createTab(initialInput: query)
+                        controller.setSplitTab(tab.id)
+                        controller.dismissFinder()
+                    },
+                    pageTint: store.activeTabPageTint
+                )
+                .onDisappear { store.splitPickerPending = false }
+            } else {
+                TabFuzzyFinder(
+                    tabs: store.visibleTabs,
+                    selectedTabID: store.selectedTabID,
+                    historyStore: controller.historyStore,
+                    bookmarkStore: controller.bookmarkStore,
+                    onSelect: { controller.selectTab($0) },
+                    onClose: { controller.closeTab($0) },
+                    onTogglePin: { controller.togglePin($0) },
+                    onCreate: { query in
+                        controller.newTab(input: query)
+                        controller.dismissFinder()
+                    },
+                    pageTint: store.activeTabPageTint
+                )
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .zIndex(5)
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: store.isFinderPresented)
+    }
+
+    private var historyFinderOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { controller.dismissHistoryFinder() }
+
+            HistoryFuzzyFinder(
+                historyStore: controller.historyStore,
+                pageTint: store.activeTabPageTint,
+                onCreate: { input in
+                    controller.newTab(input: input)
+                    controller.dismissHistoryFinder()
+                }
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .zIndex(5)
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: store.isHistoryFinderPresented)
+    }
+
     // MARK: - Helpers (all respect the focused split side)
 
     private var activeTab: TabState? { store.activeTab }
+
+    private var activePageTint: PageTint? { store.activeTabPageTint }
+
+    private var windowTintBackground: Color {
+        guard let tint = activePageTint else {
+            return Color.black.opacity(0.03)
+        }
+        return Color(red: tint.r, green: tint.g, blue: tint.b).opacity(0.30)
+    }
+
+    /// Same tint as window background; use as full-bleed behind sheet content so material picks it up.
+    private var sheetTintFill: some View {
+        windowTintBackground
+            .ignoresSafeArea()
+    }
 
     // MARK: - Content area (supports split view)
 
@@ -348,65 +405,85 @@ struct BrowserWindowView: View {
     // MARK: - Navigation surface
 
     private var navigationSurface: some View {
+        navigationSurfaceContent
+            .frame(maxWidth: 720)
+            .background(Color.white.opacity(0.87))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.12), radius: 24, y: 8)
+            .animation(.easeOut(duration: 0.12), value: suggestionService.suggestions.count)
+    }
+
+    private var navigationSurfaceContent: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                navBtn("chevron.left",    action: controller.goBack)
-                navBtn("chevron.right",   action: controller.goForward)
-                navBtn("arrow.clockwise", action: controller.reload)
-
-                TextField("URL or search", text: $addressInput)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(labelPrimary)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(stroke, lineWidth: 1))
-                    .focused($isAddressFocused)
-                    .onChange(of: addressInput) {
-                        selectedSuggestionIndex = nil
-                        suggestionService.update(query: addressInput)
-                    }
-                    .onSubmit {
-                        let target = selectedSuggestionIndex.map { suggestionService.suggestions[$0] } ?? addressInput
-                        controller.navigateSelected(to: target)
-                        suggestionService.clear()
-                    }
-                    .onKeyPress(phases: .down) { press in
-                        let isCtrl  = press.modifiers == .control
-                        let isPlain = press.modifiers.isEmpty
-                        let count   = suggestionService.suggestions.count
-                        guard count > 0 else { return .ignored }
-                        let goNext = (isCtrl && press.key == KeyEquivalent("n")) || (isPlain && press.key == .downArrow)
-                        let goPrev = (isCtrl && press.key == KeyEquivalent("p")) || (isPlain && press.key == .upArrow)
-                        if goNext { selectedSuggestionIndex = min((selectedSuggestionIndex ?? -1) + 1, count - 1); return .handled }
-                        if goPrev { guard let idx = selectedSuggestionIndex else { return .ignored }; selectedSuggestionIndex = idx > 0 ? idx - 1 : nil; return .handled }
-                        return .ignored
-                    }
-
-                navBtn("xmark", action: {
-                    suggestionService.clear()
-                    controller.dismissNavigationSurface()
-                })
-            }
-            .padding(10)
-
+            navigationBarRow
             if !suggestionService.suggestions.isEmpty {
                 Divider().overlay(Color.black.opacity(0.06)).padding(.horizontal, 10)
-                VStack(spacing: 2) {
-                    ForEach(Array(suggestionService.suggestions.enumerated()), id: \.offset) { idx, suggestion in
-                        suggestionRow(suggestion, index: idx)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                navigationSuggestionsList
             }
         }
-        .frame(maxWidth: 720)
-        .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(stroke, lineWidth: 1))
-        .shadow(color: .black.opacity(0.12), radius: 16, y: 5)
-        .animation(.easeOut(duration: 0.12), value: suggestionService.suggestions.count)
+    }
+
+    private var navigationBarRow: some View {
+        HStack(spacing: 6) {
+            navBtn("chevron.left",    action: controller.goBack)
+            navBtn("chevron.right",   action: controller.goForward)
+            navBtn("arrow.clockwise", action: controller.reload)
+            navigationAddressField
+            navBtn("xmark", action: {
+                suggestionService.clear()
+                controller.dismissNavigationSurface()
+            })
+        }
+        .padding(10)
+    }
+
+    private var navigationAddressField: some View {
+        TextField("URL or search", text: $addressInput)
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(labelPrimary)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+            )
+            .focused($isAddressFocused)
+            .onChange(of: addressInput) {
+                selectedSuggestionIndex = nil
+                suggestionService.update(query: addressInput)
+            }
+            .onSubmit {
+                let target = selectedSuggestionIndex.map { suggestionService.suggestions[$0] } ?? addressInput
+                controller.navigateSelected(to: target)
+                suggestionService.clear()
+            }
+            .onKeyPress(phases: .down) { press in
+                let isCtrl  = press.modifiers == .control
+                let isPlain = press.modifiers.isEmpty
+                let count   = suggestionService.suggestions.count
+                guard count > 0 else { return .ignored }
+                let goNext = (isCtrl && press.key == KeyEquivalent("n")) || (isPlain && press.key == .downArrow)
+                let goPrev = (isCtrl && press.key == KeyEquivalent("p")) || (isPlain && press.key == .upArrow)
+                if goNext { selectedSuggestionIndex = min((selectedSuggestionIndex ?? -1) + 1, count - 1); return .handled }
+                if goPrev { guard let idx = selectedSuggestionIndex else { return .ignored }; selectedSuggestionIndex = idx > 0 ? idx - 1 : nil; return .handled }
+                return .ignored
+            }
+    }
+
+    private var navigationSuggestionsList: some View {
+        VStack(spacing: 2) {
+            ForEach(Array(suggestionService.suggestions.enumerated()), id: \.offset) { idx, suggestion in
+                suggestionRow(suggestion, index: idx)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
 
     private func suggestionRow(_ suggestion: String, index: Int) -> some View {
@@ -424,7 +501,7 @@ struct BrowserWindowView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(isSelected ? Color.black.opacity(0.06) : Color.clear,
+        .background(isSelected ? Color.black.opacity(0.10) : Color.clear,
                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .contentShape(Rectangle())
         .onHover { if $0 { selectedSuggestionIndex = index } }
@@ -432,6 +509,38 @@ struct BrowserWindowView: View {
             controller.navigateSelected(to: suggestion)
             suggestionService.clear()
         }
+    }
+
+    // MARK: - Navigation tint helpers
+
+    private func blendedSurface(base: Color, amount: Double) -> Color {
+        guard let tint = activePageTint else { return base }
+        return blendTowardsTint(baseIsWhite: baseIsEffectivelyWhite(base), tint: tint, amount: amount)
+    }
+
+    private func blendedStroke(base: Color, amount: Double) -> Color {
+        guard let tint = activePageTint else { return base }
+        // Start from a subtle gray stroke and nudge toward the page tint hue.
+        return blendTowardsTint(baseIsWhite: false, tint: tint, amount: amount)
+            .opacity(0.7)
+    }
+
+    private func baseIsEffectivelyWhite(_ color: Color) -> Bool {
+        // Current surfaces are all very close to white; treat them as such.
+        true
+    }
+
+    private func blendTowardsTint(baseIsWhite: Bool, tint: PageTint, amount: Double) -> Color {
+        let clamped = max(0.0, min(1.0, amount))
+        let baseR: Double = baseIsWhite ? 1.0 : 0.5
+        let baseG: Double = baseIsWhite ? 1.0 : 0.5
+        let baseB: Double = baseIsWhite ? 1.0 : 0.5
+
+        let r = baseR * (1 - clamped) + tint.r * clamped
+        let g = baseG * (1 - clamped) + tint.g * clamped
+        let b = baseB * (1 - clamped) + tint.b * clamped
+
+        return Color(red: r, green: g, blue: b)
     }
 
     // MARK: - Shared sub-views
@@ -444,8 +553,11 @@ struct BrowserWindowView: View {
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(stroke, lineWidth: 1))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.20), lineWidth: 1)
+        )
         .hoverElevated(cornerRadius: 7)
     }
 
