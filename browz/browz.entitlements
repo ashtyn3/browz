@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<!-- Allow acting as a general-purpose web browser for WebAuthn/passkeys -->
-	<key>com.apple.developer.web-browser.public-key-credential</key>
-	<true/>
-	<key>com.apple.security.files.downloads.read-write</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
-	<key>com.apple.security.network.client</key>
-	<true/>
-</dict>
+	<dict>
+		<key>com.apple.security.app-sandbox</key>
+		<true />
+		<!-- Allow acting as a general-purpose web browser for WebAuthn/passkeys -->
+		<!-- <key>com.apple.developer.web-browser.public-key-credential</key> -->
+		<!-- <true /> -->
+		<key>com.apple.security.files.downloads.read-write</key>
+		<true />
+		<key>com.apple.security.files.user-selected.read-write</key>
+		<true />
+		<key>com.apple.security.network.client</key>
+		<true />
+	</dict>
 </plist>
