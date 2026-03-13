@@ -169,6 +169,15 @@ struct TabsSettingsPane: View {
             }
 
             Section {
+                Toggle("Show keyboard shortcut helper on blank page", isOn: $settings.showKeyboardShortcutHelperOnBlank)
+                Text("When you have a single blank tab, show a low-contrast shortcut reference.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Start Screen")
+            }
+
+            Section {
                 LabeledContent("Discard background tabs after") {
                     Stepper(
                         "\(settings.backgroundTabDiscardLimit) inactive tabs",

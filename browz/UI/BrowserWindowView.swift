@@ -5,7 +5,6 @@ private let surfaceElevated = Color.white.opacity(0.94)
 private let stroke          = Color.black.opacity(0.09)
 private let labelPrimary    = Color(red: 0.08, green: 0.08, blue: 0.09)
 private let labelSecondary  = Color(red: 0.08, green: 0.08, blue: 0.09).opacity(0.50)
-private let privateAccent   = Color(red: 0.38, green: 0.28, blue: 0.68)
 
 struct BrowserWindowView: View {
     @ObservedObject var controller: BrowserController
@@ -14,6 +13,7 @@ struct BrowserWindowView: View {
     @ObservedObject private var dialogPresenter: JSDialogPresenter
     @ObservedObject private var bookmarkStore: BookmarkStore
     @ObservedObject private var workspaceStore: WorkspaceStore
+    @ObservedObject private var settings = BrowserSettings.shared
     @StateObject private var suggestionService = SuggestionService()
     @State private var addressInput: String = ""
     @State private var selectedSuggestionIndex: Int? = nil
@@ -33,15 +33,12 @@ struct BrowserWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            VStack(spacing: 10) {
-                topBar
-                contentArea
-            }
-            .padding(10)
+            contentArea
+                .padding(10)
 
             if store.isNavigationSurfacePresented {
                 navigationSurface
-                    .padding(.top, 52)
+                    .padding(.top, 40)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                     .zIndex(2)
                     .animation(.spring(duration: 0.22), value: store.isNavigationSurfacePresented)
@@ -137,152 +134,6 @@ struct BrowserWindowView: View {
     // MARK: - Helpers (all respect the focused split side)
 
     private var activeTab: TabState? { store.activeTab }
-    private var isPrivateTab: Bool { activeTab?.isPrivate ?? false }
-    private var isReaderActive: Bool {
-        guard let id = store.activeTabID else { return false }
-        return controller.readerModeActiveTabIDs.contains(id)
-    }
-    private var isBookmarked: Bool {
-        guard let url = activeTab?.resolvedURL else { return false }
-        return bookmarkStore.contains(urlString: url.absoluteString)
-    }
-    private var currentZoom: Double {
-        store.tabZoom[store.activeTabID ?? UUID()] ?? 1.0
-    }
-    private var selectedTabProgress: Double? {
-        guard let id = store.activeTabID,
-              store.loadingTabIDs.contains(id) else { return nil }
-        return store.tabProgress[id] ?? 0
-    }
-
-    // MARK: - Top bar
-
-    private var topBar: some View {
-        HStack(spacing: 6) {
-            // Workspace pill
-            if !workspaceStore.workspaces.isEmpty {
-                workspacePill
-            }
-
-            if isPrivateTab {
-                Image(systemName: "shield.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(privateAccent)
-            }
-
-            Text(controller.selectedTab?.title ?? "New Tab")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isPrivateTab ? privateAccent : labelPrimary)
-                .lineLimit(1)
-
-            Spacer()
-
-            // Zoom indicator
-            if currentZoom != 1.0 {
-                Button { controller.resetZoom() } label: {
-                    Text("\(Int(currentZoom * 100))%")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(labelSecondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 3)
-                        .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 5))
-                        .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(stroke, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
-            }
-
-            // Reader mode toggle
-            if controller.selectedTab?.urlString.hasPrefix("http") == true {
-                topBarIconBtn(
-                    icon: "text.alignleft",
-                    active: isReaderActive,
-                    action: controller.toggleReaderMode
-                )
-                .transition(.opacity.combined(with: .scale(scale: 0.7)))
-            }
-
-            // Bookmark star
-            topBarIconBtn(
-                icon: isBookmarked ? "star.fill" : "star",
-                active: isBookmarked,
-                tint: isBookmarked ? Color(red: 0.9, green: 0.65, blue: 0.1) : nil,
-                action: controller.bookmarkCurrentTab
-            )
-
-            kbdHint("⌘K")
-            kbdHint("⌘L")
-
-            // Downloads badge
-            if !downloadCoordinator.items.isEmpty {
-                Button {
-                    withAnimation(.spring(duration: 0.25)) { isDownloadHUDVisible.toggle() }
-                } label: {
-                    Image(systemName: downloadCoordinator.items.allSatisfy(\.isTerminal)
-                          ? "arrow.down.circle" : "arrow.down.circle.fill")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(downloadCoordinator.items.allSatisfy(\.isTerminal)
-                                         ? labelSecondary : labelPrimary)
-                        .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.7)))
-            }
-
-            if let progress = selectedTabProgress {
-                ProgressRing(progress: progress)
-                    .frame(width: 14, height: 14)
-                    .transition(.opacity.combined(with: .scale(scale: 0.7)))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .animation(.easeInOut(duration: 0.18), value: selectedTabProgress == nil)
-        .animation(.easeInOut(duration: 0.18), value: currentZoom)
-        .animation(.easeInOut(duration: 0.22), value: isPrivateTab)
-        .background(
-            isPrivateTab ? privateAccent.opacity(0.08) : surfaceElevated,
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(isPrivateTab ? privateAccent.opacity(0.22) : stroke, lineWidth: 1)
-        )
-    }
-
-    private var workspacePill: some View {
-        Button {
-            showWorkspaceManager = true
-        } label: {
-            HStack(spacing: 3) {
-                Text(workspaceStore.activeWorkspace?.emoji ?? "⊞")
-                    .font(.system(size: 11))
-                if let ws = workspaceStore.activeWorkspace {
-                    Text(ws.name)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(labelSecondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: 70)
-                }
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(stroke, lineWidth: 1))
-            .hoverElevated(cornerRadius: 6)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func topBarIconBtn(icon: String, active: Bool, tint: Color? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(tint ?? (active ? labelPrimary : labelSecondary))
-                .frame(width: 20, height: 20)
-        }
-        .buttonStyle(.plain)
-    }
 
     // MARK: - Content area (supports split view)
 
@@ -434,34 +285,54 @@ struct BrowserWindowView: View {
                     SettingsTabView()
                         .styledPane(stroke: stroke)
                 } else {
-                    VStack(spacing: 0) {
-                        WebViewContainer(
-                            tab: tab,
-                            runtimeRegistry: controller.runtimeRegistry,
-                            onNavigationUpdate: controller.navigationDidUpdate(tabID:title:url:)
-                        )
-                        if controller.isFindBarVisible {
-                            FindBar(
-                                query: $controller.findQuery,
-                                matchFound: controller.findMatchFound,
-                                onNext: controller.findNext,
-                                onPrev: controller.findPrev,
-                                onClose: controller.closeFindBar
+                    let isBlankStart = store.tabs.count == 1 && tab.urlString == "about:blank" && settings.showKeyboardShortcutHelperOnBlank
+                    ZStack {
+                        VStack(spacing: 0) {
+                            WebViewContainer(
+                                tab: tab,
+                                runtimeRegistry: controller.runtimeRegistry,
+                                onNavigationUpdate: controller.navigationDidUpdate(tabID:title:url:)
                             )
-                            .padding(8)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            if controller.isFindBarVisible {
+                                FindBar(
+                                    query: $controller.findQuery,
+                                    matchFound: controller.findMatchFound,
+                                    onNext: controller.findNext,
+                                    onPrev: controller.findPrev,
+                                    onClose: controller.closeFindBar
+                                )
+                                .padding(8)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                        }
+                        .onChange(of: controller.findQuery) {
+                            if !controller.findQuery.isEmpty { controller.findNext() }
+                        }
+                        if isBlankStart {
+                            StartScreenView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
                     .styledPane(stroke: stroke)
-                    .onChange(of: controller.findQuery) {
-                        if !controller.findQuery.isEmpty { controller.findNext() }
-                    }
                 }
             } else {
-                Color.clear.overlay(Text("No tab selected").foregroundStyle(labelSecondary))
+                emptyState
             }
         }
         .animation(.spring(duration: 0.2), value: controller.isFindBarVisible)
+    }
+
+    private var emptyState: some View {
+        ZStack {
+            Color.clear
+            if settings.showKeyboardShortcutHelperOnBlank {
+                StartScreenView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                Text("No tab selected")
+                    .foregroundStyle(labelSecondary)
+            }
+        }
     }
 
     // MARK: - Navigation surface
@@ -568,15 +439,6 @@ struct BrowserWindowView: View {
         .hoverElevated(cornerRadius: 7)
     }
 
-    private func kbdHint(_ label: String) -> some View {
-        Text(label)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(labelSecondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(surfaceElevated, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(stroke, lineWidth: 1))
-    }
 }
 
 // MARK: - Pane styling
@@ -590,20 +452,3 @@ private extension View {
     }
 }
 
-// MARK: - Progress ring
-
-private struct ProgressRing: View {
-    let progress: Double
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(Color.black.opacity(0.10), lineWidth: 1.5)
-            Circle()
-                .trim(from: 0, to: max(0.04, progress))
-                .stroke(Color(red: 0.08, green: 0.08, blue: 0.10),
-                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.12), value: progress)
-        }
-    }
-}

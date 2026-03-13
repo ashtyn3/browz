@@ -71,6 +71,9 @@ final class BrowserSettings: ObservableObject {
     @Published var restoreSessionOnLaunch: Bool {
         didSet { persist("restoreSessionOnLaunch", restoreSessionOnLaunch) }
     }
+    @Published var showKeyboardShortcutHelperOnBlank: Bool {
+        didSet { persist("showKeyboardShortcutHelperOnBlank", showKeyboardShortcutHelperOnBlank) }
+    }
     @Published var developerExtrasEnabled: Bool {
         didSet { persist("developerExtrasEnabled", developerExtrasEnabled) }
     }
@@ -96,6 +99,7 @@ final class BrowserSettings: ObservableObject {
         self.customNewTabURL       = UserDefaults.standard.string(forKey: "customNewTabURL") ?? ""
         self.backgroundTabDiscardLimit = (UserDefaults.standard.object(forKey: "backgroundTabDiscardLimit") as? Int) ?? 8
         self.restoreSessionOnLaunch    = (UserDefaults.standard.object(forKey: "restoreSessionOnLaunch") as? Bool) ?? true
+        self.showKeyboardShortcutHelperOnBlank = (UserDefaults.standard.object(forKey: "showKeyboardShortcutHelperOnBlank") as? Bool) ?? true
         self.developerExtrasEnabled    = (UserDefaults.standard.object(forKey: "developerExtrasEnabled") as? Bool) ?? true
         self.googleSignInCompatibilityMode = (UserDefaults.standard.object(forKey: "googleSignInCompatibilityMode") as? Bool) ?? true
         self.blockThirdPartyCookies    = (UserDefaults.standard.object(forKey: "blockThirdPartyCookies") as? Bool) ?? false
