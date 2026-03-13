@@ -10,6 +10,8 @@ final class TabRuntimeRegistry {
     var onProgressChange: ((UUID, Double) -> Void)?
     var onDownloadStarted: ((WKDownload) -> Void)?
     var onDialogRequest: ((JSDialogRequest) -> Void)?
+    /// Called when a new page-derived tint is available for a tab.
+    var onPageTintChange: ((UUID, PageTint?) -> Void)?
     /// Set once after async compilation; applied to all subsequently created webviews.
     var contentRuleList: WKContentRuleList?
 
@@ -47,7 +49,8 @@ final class TabRuntimeRegistry {
             onLoadingChange: onLoadingChange,
             onProgressChange: onProgressChange,
             onDownloadStarted: onDownloadStarted,
-            onDialogRequest: onDialogRequest
+            onDialogRequest: onDialogRequest,
+            onPageTintChange: onPageTintChange
         )
         webView.navigationDelegate = relay
         webView.uiDelegate = relay
@@ -189,6 +192,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
     private let onDownloadStarted: ((WKDownload) -> Void)?
     private let onDialogRequest: ((JSDialogRequest) -> Void)?
     private var progressObservation: NSKeyValueObservation?
+    private let onPageTintChange: ((UUID, PageTint?) -> Void)?
 
     init(
         tabID: UUID,
@@ -197,7 +201,8 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         onLoadingChange: ((UUID, Bool) -> Void)?,
         onProgressChange: ((UUID, Double) -> Void)?,
         onDownloadStarted: ((WKDownload) -> Void)?,
-        onDialogRequest: ((JSDialogRequest) -> Void)?
+        onDialogRequest: ((JSDialogRequest) -> Void)?,
+        onPageTintChange: ((UUID, PageTint?) -> Void)?
     ) {
         self.tabID = tabID
         self.callback = callback
@@ -206,6 +211,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         self.onProgressChange = onProgressChange
         self.onDownloadStarted = onDownloadStarted
         self.onDialogRequest = onDialogRequest
+        self.onPageTintChange = onPageTintChange
         super.init()
     }
 
@@ -227,6 +233,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         onLoadingChange?(tabID, false)
         callback(tabID, webView.title, webView.url)
+        samplePageTint(in: webView)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -325,6 +332,89 @@ private extension WebViewNavigationRelay {
             ?? "<unknown>"
         print("[GoogleSignIn] host=\(host) ua=\(ua) contentBlocking=\(BrowserSettings.shared.contentBlockingEnabled)")
 #endif
+    }
+
+    /// Resolve a page tint similar to how browsers theme their UI:
+    /// prefer explicit `meta[name="theme-color"]`, otherwise no tint.
+    func samplePageTint(in webView: WKWebView) {
+        // 1) Try meta[name="theme-color"] for an explicit site-provided theme.
+        let js = """
+        (function() {
+          try {
+            var el = document.querySelector('meta[name="theme-color"]');
+            if (!el) return null;
+            var c = el.content || el.getAttribute('content');
+            if (!c || typeof c !== 'string') return null;
+            return c.trim();
+          } catch (e) {
+            return null;
+          }
+        })();
+        """
+
+        webView.evaluateJavaScript(js) { [weak self] result, _ in
+            guard let self else { return }
+
+            if let s = result as? String,
+               let tint = Self.pageTint(fromThemeColor: s) {
+                self.onPageTintChange?(self.tabID, tint)
+                return
+            }
+
+            // No explicit theme-color; keep the UI neutral.
+            self.onPageTintChange?(self.tabID, nil)
+        }
+    }
+
+    /// Convert a theme-color string (typically a hex like #RRGGBB) into a PageTint.
+    static func pageTint(fromThemeColor string: String) -> PageTint? {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard trimmed.hasPrefix("#") else { return nil }
+        var hex = String(trimmed.dropFirst())
+        if hex.count == 3 {
+            // Expand #rgb -> #rrggbb
+            hex = hex.map { "\($0)\($0)" }.joined()
+        }
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return nil }
+        let r8 = (value >> 16) & 0xFF
+        let g8 = (value >> 8) & 0xFF
+        let b8 = value & 0xFF
+        var r = Double(r8) / 255.0
+        var g = Double(g8) / 255.0
+        var b = Double(b8) / 255.0
+
+        if let styled = styledColor(r: r, g: g, b: b) {
+            r = styled.0; g = styled.1; b = styled.2
+        }
+        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        let isDark = lum < 0.45
+        return PageTint(r: r, g: g, b: b, isDark: isDark)
+    }
+
+    /// Apply a simple style curve in HSB space to keep tints readable.
+    private static func styledColor(r: Double, g: Double, b: Double) -> (Double, Double, Double)? {
+        let base = NSColor(srgbRed: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: 1)
+        guard let conv = base.usingColorSpace(.sRGB) else { return nil }
+        var hue: CGFloat = 0, sat: CGFloat = 0, bri: CGFloat = 0, alpha: CGFloat = 0
+        conv.getHue(&hue, saturation: &sat, brightness: &bri, alpha: &alpha)
+
+        // Clamp into a relatively soft band.
+        var clampedSat = max(0.15, min(0.65, sat))
+        var clampedBri = max(0.55, min(0.95, bri))
+
+        // If the hue is in a red/pink/orange band, soften saturation a bit more so
+        // the chrome doesn't skew uniformly rosy.
+        let hDeg = hue * 360.0
+        if (hDeg >= 340 || hDeg <= 25) || (hDeg >= 25 && hDeg <= 55) {
+            clampedSat *= 0.75
+            clampedBri = min(0.9, clampedBri)
+        }
+
+        let styled = NSColor(hue: hue, saturation: clampedSat, brightness: clampedBri, alpha: 1)
+        guard let styledSRGB = styled.usingColorSpace(.sRGB) else { return nil }
+        return (Double(styledSRGB.redComponent),
+                Double(styledSRGB.greenComponent),
+                Double(styledSRGB.blueComponent))
     }
 }
 
