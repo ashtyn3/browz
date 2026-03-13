@@ -87,6 +87,15 @@ struct BrowserWindowView: View {
         .sheet(isPresented: $showWorkspaceManager) {
             WorkspaceManagerView(store: workspaceStore)
         }
+        .sheet(isPresented: $store.isHistoryFinderPresented) {
+            HistoryFuzzyFinder(
+                historyStore: controller.historyStore,
+                onCreate: { input in
+                    controller.newTab(input: input)
+                    controller.dismissHistoryFinder()
+                }
+            )
+        }
         .onChange(of: store.selectedTabID) {
             addressInput = store.activeTab?.urlString ?? ""
         }
@@ -101,7 +110,8 @@ struct BrowserWindowView: View {
             }
         }
         .onExitCommand {
-            if store.isFinderPresented { controller.dismissFinder() }
+            if store.isHistoryFinderPresented { controller.dismissHistoryFinder() }
+            else if store.isFinderPresented { controller.dismissFinder() }
             else if store.isNavigationSurfacePresented { controller.dismissNavigationSurface() }
             else if controller.isFindBarVisible { controller.closeFindBar() }
         }

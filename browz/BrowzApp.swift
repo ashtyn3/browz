@@ -107,6 +107,11 @@ struct BrowzApp: App {
                     .keyboardShortcut("d", modifiers: .command)
             }
 
+            CommandMenu("History") {
+                Button("Search History…") { controller.presentHistoryFinder() }
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+            }
+
             CommandGroup(replacing: .appSettings) {
                 Button("Settings") { controller.openSettings() }
                     .keyboardShortcut(",", modifiers: .command)
@@ -239,6 +244,14 @@ final class BrowserController: ObservableObject {
     }
 
     func dismissFinder() { store.isFinderPresented = false }
+
+    func presentHistoryFinder() {
+        store.isNavigationSurfacePresented = false
+        store.isFinderPresented = false
+        store.isHistoryFinderPresented = true
+    }
+
+    func dismissHistoryFinder() { store.isHistoryFinderPresented = false }
 
     func presentNavigationSurface() {
         store.isFinderPresented = false

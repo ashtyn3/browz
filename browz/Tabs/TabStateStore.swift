@@ -6,6 +6,7 @@ final class TabStateStore: ObservableObject {
     @Published private(set) var tabs: [TabState] = []
     @Published var selectedTabID: UUID?
     @Published var isFinderPresented: Bool = false
+    @Published var isHistoryFinderPresented: Bool = false
     @Published var isNavigationSurfacePresented: Bool = false
     @Published private(set) var loadingTabIDs: Set<UUID> = []
     @Published private(set) var tabProgress: [UUID: Double] = [:]

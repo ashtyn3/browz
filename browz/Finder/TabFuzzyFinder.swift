@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Palette tokens
 private let paletteBg       = Color.white
@@ -36,9 +37,12 @@ struct TabFuzzyFinder: View {
 
     @State private var query: String = ""
     @State private var hoveredTabID: UUID? = nil
-    @State private var hoveredHistoryID: UUID? = nil
     @State private var selectedIndex: Int? = nil
+    @State private var keyMonitor: Any? = nil
     @FocusState private var isFocused: Bool
+
+    private static let notifNext = Notification.Name("browz.finder.selectNext")
+    private static let notifPrev = Notification.Name("browz.finder.selectPrev")
 
     // MARK: - Computed lists
 
@@ -55,23 +59,8 @@ struct TabFuzzyFinder: View {
         }.map(\.0)
     }
 
-    private var bookmarkResults: [BookmarkEntry] {
-        let openURLs = Set(tabs.map(\.urlString))
-        return bookmarkStore.search(query: query).filter { !openURLs.contains($0.urlString) }
-    }
-
-    private var historyResults: [HistoryEntry] {
-        guard !query.isEmpty else { return [] }
-        let openURLs = Set(tabs.map(\.urlString))
-        let bookmarkedURLs = Set(bookmarkStore.bookmarks.map(\.urlString))
-        return historyStore.search(query: query)
-            .filter { !openURLs.contains($0.urlString) && !bookmarkedURLs.contains($0.urlString) }
-    }
-
     private var allItems: [FinderItem] {
         var items: [FinderItem] = rankedTabs.map { .tab($0) }
-        items += bookmarkResults.map { .bookmark($0) }
-        items += historyResults.map { .history($0) }
         if items.isEmpty && !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             items.append(.openURL(query))
         }
@@ -111,7 +100,32 @@ struct TabFuzzyFinder: View {
         )
         .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
-        .onAppear { isFocused = true }
+        .onAppear {
+            if allItems.count > 0 { selectedIndex = 0 }
+            isFocused = true
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                let ctrl = event.modifierFlags.contains(.control)
+                let plain = event.modifierFlags.intersection([.shift, .option, .command, .control]).isEmpty
+                let isNext = (ctrl && event.keyCode == 45) || (plain && event.keyCode == 125)
+                let isPrev = (ctrl && event.keyCode == 35) || (plain && event.keyCode == 126)
+                if isNext { NotificationCenter.default.post(name: Self.notifNext, object: nil); return nil }
+                if isPrev { NotificationCenter.default.post(name: Self.notifPrev, object: nil); return nil }
+                return event
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { isFocused = true }
+        }
+        .onDisappear {
+            if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.notifNext)) { _ in
+            let count = allItems.count
+            guard count > 0 else { return }
+            selectedIndex = min((selectedIndex ?? -1) + 1, count - 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.notifPrev)) { _ in
+            guard let idx = selectedIndex else { return }
+            selectedIndex = idx > 0 ? idx - 1 : nil
+        }
     }
 
     // MARK: - Search bar
@@ -123,7 +137,7 @@ struct TabFuzzyFinder: View {
                 .foregroundStyle(iconTint)
                 .frame(width: 20)
 
-            TextField("Search tabs, history, type a URL…", text: $query)
+            TextField("Find tab or search web…", text: $query)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(labelPrimary)
                 .textFieldStyle(.plain)
@@ -155,37 +169,17 @@ struct TabFuzzyFinder: View {
 
     private var resultsList: some View {
         let tabList   = rankedTabs
-        let bkList    = bookmarkResults
-        let histList  = historyResults
         let tabOffset = 0
-        let bkOffset  = tabList.count
-        let histOffset = tabList.count + bkList.count
-        let multiSection = [!tabList.isEmpty, !bkList.isEmpty, !histList.isEmpty].filter { $0 }.count > 1
 
         return ScrollView {
             LazyVStack(spacing: 2) {
                 if !tabList.isEmpty {
-                    if multiSection { sectionLabel("Open Tabs") }
                     ForEach(Array(tabList.enumerated()), id: \.element.id) { i, tab in
                         tabRow(tab, listIndex: tabOffset + i)
                     }
                 }
 
-                if !bkList.isEmpty {
-                    sectionLabel("Bookmarks").padding(.top, tabList.isEmpty ? 0 : 6)
-                    ForEach(Array(bkList.enumerated()), id: \.element.id) { i, bk in
-                        bookmarkRow(bk, listIndex: bkOffset + i)
-                    }
-                }
-
-                if !histList.isEmpty {
-                    sectionLabel("History").padding(.top, (tabList.isEmpty && bkList.isEmpty) ? 0 : 6)
-                    ForEach(Array(histList.enumerated()), id: \.element.id) { i, entry in
-                        historyRow(entry, listIndex: histOffset + i)
-                    }
-                }
-
-                if tabList.isEmpty && bkList.isEmpty && histList.isEmpty && !query.isEmpty {
+                if tabList.isEmpty && !query.isEmpty {
                     openURLRow
                 }
             }
@@ -227,7 +221,7 @@ struct TabFuzzyFinder: View {
             }
 
             Spacer()
-            kbdChip("↵")
+                    kbdChip("↵")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -306,93 +300,6 @@ struct TabFuzzyFinder: View {
         .onHover { hoveredTabID = $0 ? tab.id : nil }
         .onTapGesture { onSelect(tab.id) }
         .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.10)
-    }
-
-    // MARK: - Bookmark row
-
-    private func bookmarkRow(_ entry: BookmarkEntry, listIndex: Int) -> some View {
-        let isHovered = hoveredHistoryID == entry.id
-        let isSel     = selectedIndex == listIndex
-
-        return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(paletteInput)
-                    .frame(width: 32, height: 32)
-                Image(systemName: "star.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color(red: 0.9, green: 0.65, blue: 0.1).opacity(0.8))
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(labelPrimary)
-                    .lineLimit(1)
-                Text(entry.urlString)
-                    .font(.system(size: 11))
-                    .foregroundStyle(labelSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-            if isHovered || isSel { kbdChip("↵") }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(rowBg(isActive: false, isSel: isSel, isHovered: isHovered))
-        )
-        .contentShape(Rectangle())
-        .onHover { hoveredHistoryID = $0 ? entry.id : nil }
-        .onTapGesture { onCreate(entry.urlString) }
-        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.08)
-    }
-
-    // MARK: - History row
-
-    private func historyRow(_ entry: HistoryEntry, listIndex: Int) -> some View {
-        let isHovered = hoveredHistoryID == entry.id
-        let isSel     = selectedIndex == listIndex
-
-        return HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(paletteInput)
-                    .frame(width: 32, height: 32)
-                Image(systemName: "clock")
-                    .font(.system(size: 12))
-                    .foregroundStyle(labelTertiary)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(labelPrimary)
-                    .lineLimit(1)
-                Text(entry.urlString)
-                    .font(.system(size: 11))
-                    .foregroundStyle(labelSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if isHovered || isSel {
-                kbdChip("↵")
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(rowBg(isActive: false, isSel: isSel, isHovered: isHovered))
-        )
-        .contentShape(Rectangle())
-        .onHover { hoveredHistoryID = $0 ? entry.id : nil }
-        .onTapGesture { onCreate(entry.urlString) }
-        .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.08)
     }
 
     private func rowBg(isActive: Bool, isSel: Bool, isHovered: Bool) -> Color {
