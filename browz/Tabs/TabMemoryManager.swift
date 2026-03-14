@@ -59,7 +59,8 @@ final class TabMemoryManager {
         guard store.tabs.count > 1 else { return }
         guard let selectedID = store.selectedTabID else { return }
 
-        let protectedIDs = Set([selectedID])
+        var protectedIDs = Set([selectedID])
+        if let splitID = store.splitTabID { protectedIDs.insert(splitID) }
         let discardIDs = store.discardCandidates(excluding: protectedIDs, maxCount: discardLimit)
 
         for id in discardIDs {

@@ -20,25 +20,9 @@ struct BrowzApp: App {
         }
         .commands {
             CommandMenu("Tabs") {
-                Button("Find Tab") {
-                    // #region agent log
-                    agentDebugLogEvent(
-                        message: "Command Find Tab invoked",
-                        hypothesisId: "H2_commands_not_firing_from_shortcuts"
-                    )
-                    // #endregion
-                    controller.presentFinder()
-                }
+                Button("Find Tab") { controller.presentFinder() }
                     .keyboardShortcut("k", modifiers: .command)
-                Button("New Tab") {
-                    // #region agent log
-                    agentDebugLogEvent(
-                        message: "Command New Tab invoked",
-                        hypothesisId: "H2_commands_not_firing_from_shortcuts"
-                    )
-                    // #endregion
-                    controller.newTab(openNavigationSurface: true)
-                }
+                Button("New Tab") { controller.newTab(openNavigationSurface: true) }
                     .keyboardShortcut("t", modifiers: .command)
                 Button("New Private Tab") { controller.newPrivateTab() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
@@ -63,15 +47,7 @@ struct BrowzApp: App {
             }
 
             CommandMenu("Navigation") {
-                Button("Open Address Bar") {
-                    // #region agent log
-                    agentDebugLogEvent(
-                        message: "Command Open Address Bar invoked",
-                        hypothesisId: "H2_commands_not_firing_from_shortcuts"
-                    )
-                    // #endregion
-                    controller.presentNavigationSurface()
-                }
+                Button("Open Address Bar") { controller.presentNavigationSurface() }
                     .keyboardShortcut("l", modifiers: .command)
                 Button("Hide Address Bar") { controller.dismissNavigationSurface() }
                     .keyboardShortcut(.escape, modifiers: [])
@@ -121,42 +97,6 @@ struct BrowzApp: App {
         }
     }
 }
-
-// #region agent log
-private func agentDebugLogEvent(message: String, hypothesisId: String) {
-    print("[AGENT_EVENT] \(message) hypothesis=\(hypothesisId)")
-    let payload: [String: Any] = [
-        "sessionId": "2faf4f",
-        "id": "log_\(Int(Date().timeIntervalSince1970))",
-        "timestamp": Int(Date().timeIntervalSince1970 * 1000),
-        "location": "BrowzApp.swift:BrowzApp.commands",
-        "message": message,
-        "data": [:] as [String: Any],
-        "runId": "shortcuts-debug",
-        "hypothesisId": hypothesisId,
-    ]
-
-    guard let data = try? JSONSerialization.data(withJSONObject: payload),
-          let line = String(data: data, encoding: .utf8),
-          let lineData = (line + "\n").data(using: .utf8) else {
-        return
-    }
-
-    let url = URL(fileURLWithPath: "/Users/ashtynmorel-blake/local/browz/.cursor/debug-2faf4f.log")
-    if FileManager.default.fileExists(atPath: url.path),
-       let handle = try? FileHandle(forWritingTo: url) {
-        do {
-            try handle.seekToEnd()
-            try handle.write(contentsOf: lineData)
-            try handle.close()
-        } catch {
-            try? handle.close()
-        }
-    } else {
-        try? lineData.write(to: url)
-    }
-}
-// #endregion
 
 // MARK: - BrowserController
 
@@ -231,13 +171,6 @@ final class BrowserController: ObservableObject {
                 runtimeRegistry?.contentRuleList = rules
             }
         }
-
-        // #region agent log
-        agentDebugLog(
-            message: "BrowserController.init completed",
-            hypothesisId: "H1_imports_and_combine_for_compile_errors"
-        )
-        // #endregion
     }
 
     // MARK: - Tab access
@@ -262,13 +195,6 @@ final class BrowserController: ObservableObject {
     func presentNavigationSurface() {
         store.isFinderPresented = false
         store.isNavigationSurfacePresented = true
-
-        // #region agent log
-        agentDebugLog(
-            message: "presentNavigationSurface called",
-            hypothesisId: "H3_controller_methods_not_reached"
-        )
-        // #endregion
     }
 
     func dismissNavigationSurface() { store.isNavigationSurfacePresented = false }
@@ -296,13 +222,6 @@ final class BrowserController: ObservableObject {
         if openNavigationSurface {
             presentNavigationSurface()
         }
-
-        // #region agent log
-        agentDebugLog(
-            message: "newTab called with url=\(url)",
-            hypothesisId: "H3_controller_methods_not_reached"
-        )
-        // #endregion
     }
 
     func newPrivateTab(input: String? = nil) {
@@ -312,7 +231,6 @@ final class BrowserController: ObservableObject {
     func closeTab(_ id: UUID) {
         runtimeRegistry.discardWebView(for: id)
         store.closeTab(id)
-        if store.splitTabID == id { store.splitTabID = nil }
     }
 
     func closeSelectedTab() {
@@ -487,39 +405,4 @@ final class BrowserController: ObservableObject {
             .store(in: &cancellables)
     }
 
-    // #region agent log
-    private func agentDebugLog(message: String, hypothesisId: String) {
-        print("[AGENT_DEBUG] \(message) hypothesis=\(hypothesisId)")
-        let payload: [String: Any] = [
-            "sessionId": "2faf4f",
-            "id": "log_\(Int(Date().timeIntervalSince1970))",
-            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
-            "location": "BrowzApp.swift:BrowserController.init",
-            "message": message,
-            "data": [:] as [String: Any],
-            "runId": "compile-fix",
-            "hypothesisId": hypothesisId,
-        ]
-
-        guard let data = try? JSONSerialization.data(withJSONObject: payload),
-              let line = String(data: data, encoding: .utf8),
-              let lineData = (line + "\n").data(using: .utf8) else {
-            return
-        }
-
-        let url = URL(fileURLWithPath: "/Users/ashtynmorel-blake/local/browz/.cursor/debug-2faf4f.log")
-        if FileManager.default.fileExists(atPath: url.path),
-           let handle = try? FileHandle(forWritingTo: url) {
-            do {
-                try handle.seekToEnd()
-                try handle.write(contentsOf: lineData)
-                try handle.close()
-            } catch {
-                try? handle.close()
-            }
-        } else {
-            try? lineData.write(to: url)
-        }
-    }
-    // #endregion
 }

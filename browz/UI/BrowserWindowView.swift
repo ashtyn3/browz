@@ -370,10 +370,6 @@ struct BrowserWindowView: View {
                 )
         )
         .animation(.easeInOut(duration: 0.15), value: controller.isFindBarVisible)
-        .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture().onEnded {
-            if !isFocused { store.focusSplitSide(side) }
-        })
     }
 
     private var singlePane: some View {
@@ -541,38 +537,6 @@ struct BrowserWindowView: View {
             controller.navigateSelected(to: suggestion)
             suggestionService.clear()
         }
-    }
-
-    // MARK: - Navigation tint helpers
-
-    private func blendedSurface(base: Color, amount: Double) -> Color {
-        guard let tint = activePageTint else { return base }
-        return blendTowardsTint(baseIsWhite: baseIsEffectivelyWhite(base), tint: tint, amount: amount)
-    }
-
-    private func blendedStroke(base: Color, amount: Double) -> Color {
-        guard let tint = activePageTint else { return base }
-        // Start from a subtle gray stroke and nudge toward the page tint hue.
-        return blendTowardsTint(baseIsWhite: false, tint: tint, amount: amount)
-            .opacity(0.7)
-    }
-
-    private func baseIsEffectivelyWhite(_ color: Color) -> Bool {
-        // Current surfaces are all very close to white; treat them as such.
-        true
-    }
-
-    private func blendTowardsTint(baseIsWhite: Bool, tint: PageTint, amount: Double) -> Color {
-        let clamped = max(0.0, min(1.0, amount))
-        let baseR: Double = baseIsWhite ? 1.0 : 0.5
-        let baseG: Double = baseIsWhite ? 1.0 : 0.5
-        let baseB: Double = baseIsWhite ? 1.0 : 0.5
-
-        let r = baseR * (1 - clamped) + tint.r * clamped
-        let g = baseG * (1 - clamped) + tint.g * clamped
-        let b = baseB * (1 - clamped) + tint.b * clamped
-
-        return Color(red: r, green: g, blue: b)
     }
 
     // MARK: - Shared sub-views

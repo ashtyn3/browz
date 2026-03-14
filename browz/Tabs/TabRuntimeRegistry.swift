@@ -85,15 +85,17 @@ final class TabRuntimeRegistry {
 
     func load(_ input: String, in tab: TabState) {
         let webView = webView(for: tab, callback: { _, _, _ in })
-        if let url = TabState(urlString: input).resolvedURL {
+        if let url = BrowserSettings.shared.resolve(input: input) {
             webView.load(URLRequest(url: url))
         }
     }
 
     func discardWebView(for tabID: UUID) {
-        webViews[tabID]?.stopLoading()
-        webViews[tabID]?.navigationDelegate = nil
-        webViews[tabID]?.uiDelegate = nil
+        if let wv = webViews[tabID] {
+            wv.stopLoading()
+            wv.navigationDelegate = nil
+            wv.uiDelegate = nil
+        }
         webViews[tabID] = nil
         delegateRelays[tabID] = nil
     }
@@ -267,7 +269,6 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         // "Download Image", "Download Linked File", etc. set this flag.
         // Returning .download causes WebKit to call navigationAction:didBecome:download:
         if navigationAction.shouldPerformDownload {
-            print("[DL] shouldPerformDownload=true → .download for \(navigationAction.request.url?.absoluteString ?? "nil")")
             decisionHandler(.download)
             return
         }
@@ -313,7 +314,6 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         navigationAction: WKNavigationAction,
         didBecome download: WKDownload
     ) {
-        print("[DL] navigationAction:didBecome:download fired, handing to coordinator")
         onDownloadStarted?(download)
     }
 
@@ -322,7 +322,6 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         navigationResponse: WKNavigationResponse,
         didBecome download: WKDownload
     ) {
-        print("[DL] navigationResponse:didBecome:download fired, handing to coordinator")
         onDownloadStarted?(download)
     }
 }
@@ -412,7 +411,7 @@ private extension WebViewNavigationRelay {
         // If the hue is in a red/pink/orange band, soften saturation a bit more so
         // the chrome doesn't skew uniformly rosy.
         let hDeg = hue * 360.0
-        if (hDeg >= 340 || hDeg <= 25) || (hDeg >= 25 && hDeg <= 55) {
+        if hDeg >= 340 || hDeg <= 55 {
             clampedSat *= 0.75
             clampedBri = min(0.9, clampedBri)
         }
@@ -438,9 +437,7 @@ extension WebViewNavigationRelay: WKUIDelegate {
         if let contextView = webView as? ContextMenuWebView,
            contextView.pendingDownloadAction == .image {
             contextView.pendingDownloadAction = nil
-            print("[DL] Intercepted Download Image for \(requestURL)")
             webView.startDownload(using: URLRequest(url: requestURL)) { [weak self] download in
-                print("[DL] startDownload completion, handing to coordinator")
                 self?.onDownloadStarted?(download)
             }
             return nil
