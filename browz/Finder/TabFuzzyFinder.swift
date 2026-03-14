@@ -458,9 +458,11 @@ struct TabFuzzyFinder: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(isAct ? accentBar.opacity(0.10) : palette.input)
                         .frame(width: 32, height: 32)
-                    Image(systemName: tab.isPrivate ? "shield.fill" : "globe")
-                        .font(.system(size: 13))
-                        .foregroundStyle(isAct ? accentBar : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary))
+                    FaviconView(
+                        urlString: tab.urlString,
+                        isPrivate: tab.isPrivate,
+                        fallbackColor: isAct ? accentBar : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary)
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -549,10 +551,12 @@ struct TabFuzzyFinder: View {
                         .foregroundStyle(palette.labelTertiary)
                         .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 } else {
-                    Image(systemName: tab.isPrivate ? "shield.fill" : "globe")
-                        .font(.system(size: 13))
-                        .foregroundStyle(isActive ? rowAccent : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary))
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    FaviconView(
+                        urlString: tab.urlString,
+                        isPrivate: tab.isPrivate,
+                        fallbackColor: isActive ? rowAccent : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary)
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
             }
             .animation(.easeInOut(duration: 0.15), value: showHandle)

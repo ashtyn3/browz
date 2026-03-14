@@ -107,6 +107,18 @@ final class TabRuntimeRegistry {
         }
     }
 
+    /// Applies or removes `pointer-events: none` on every live webview's
+    /// document root. Call with `false` when an overlay opens to freeze CSS
+    /// hover state on all pages; call with `true` when the overlay closes.
+    func setPointerEventsEnabled(_ enabled: Bool) {
+        let js = enabled
+            ? "document.documentElement.style.pointerEvents = ''"
+            : "document.documentElement.style.pointerEvents = 'none'"
+        for webView in webViews.values {
+            webView.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+
     func goBack(tabID: UUID) {
         webViews[tabID]?.goBack()
     }

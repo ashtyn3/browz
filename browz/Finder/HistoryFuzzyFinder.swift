@@ -166,9 +166,10 @@ struct HistoryFuzzyFinder: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(palette.input)
                     .frame(width: 32, height: 32)
-                Image(systemName: "clock")
-                    .font(.system(size: 12))
-                    .foregroundStyle(palette.labelTertiary)
+                FaviconView(
+                    urlString: entry.urlString,
+                    fallbackColor: palette.labelTertiary
+                )
             }
 
             VStack(alignment: .leading, spacing: 3) {
