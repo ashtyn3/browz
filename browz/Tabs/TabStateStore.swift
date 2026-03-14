@@ -82,6 +82,7 @@ final class TabStateStore: ObservableObject {
     }
 
     func closeTab(_ id: UUID) {
+        if splitTabID == id { splitTabID = nil }
         tabs.removeAll(where: { $0.id == id })
         guard !tabs.isEmpty else {
             let replacement = TabState()

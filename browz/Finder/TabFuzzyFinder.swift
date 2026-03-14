@@ -65,14 +65,6 @@ struct TabFuzzyFinder: View {
         self.onTogglePin = onTogglePin
         self.onCreate = onCreate
         self.onMoveTab = onMoveTab
-        self._query = State(initialValue: "")
-        self._hoveredTabID = State(initialValue: nil)
-        self._selectedIndex = State(initialValue: nil)
-        self._keyMonitor = State(initialValue: nil)
-        self._draggingTabID = State(initialValue: nil)
-        self._dragOrder = State(initialValue: nil)
-        self._reorderHoveredTabID = State(initialValue: nil)
-        self._isFocused = FocusState()
         self.palette = FinderPalette.make(pageTint: pageTint)
     }
 
@@ -145,8 +137,7 @@ struct TabFuzzyFinder: View {
         .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
         .onAppear {
-            if allItems.count > 0 { selectedIndex = 0 }
-            isFocused = true
+            if !allItems.isEmpty { selectedIndex = 0 }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 let ctrl = event.modifierFlags.contains(.control)
                 let plain = event.modifierFlags.intersection([.shift, .option, .command, .control]).isEmpty

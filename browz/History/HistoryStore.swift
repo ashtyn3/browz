@@ -27,13 +27,12 @@ final class HistoryStore: ObservableObject {
               ["http", "https"].contains(scheme) else { return }
 
         let urlString = url.absoluteString
-        let resolvedTitle = title?.isEmpty == false ? title! : urlString
+        let resolvedTitle = (title?.isEmpty == false ? title : nil) ?? urlString
 
         if let index = entries.firstIndex(where: { $0.urlString == urlString }) {
-            entries[index].title = resolvedTitle
-            entries[index].visitedAt = .now
-            // move to front
-            let updated = entries.remove(at: index)
+            var updated = entries.remove(at: index)
+            updated.title = resolvedTitle
+            updated.visitedAt = .now
             entries.insert(updated, at: 0)
         } else {
             entries.insert(HistoryEntry(title: resolvedTitle, urlString: urlString, visitedAt: .now), at: 0)

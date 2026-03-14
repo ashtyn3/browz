@@ -93,18 +93,19 @@ final class BrowserSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     private init() {
-        self.searchEngine          = SearchEngine(rawValue: UserDefaults.standard.string(forKey: "searchEngine") ?? "") ?? .duckDuckGo
-        self.customSearchBaseURL   = UserDefaults.standard.string(forKey: "customSearchBaseURL") ?? ""
-        self.newTabPage            = NewTabPage(rawValue: UserDefaults.standard.string(forKey: "newTabPage") ?? "") ?? .blank
-        self.customNewTabURL       = UserDefaults.standard.string(forKey: "customNewTabURL") ?? ""
-        self.backgroundTabDiscardLimit = (UserDefaults.standard.object(forKey: "backgroundTabDiscardLimit") as? Int) ?? 8
-        self.restoreSessionOnLaunch    = (UserDefaults.standard.object(forKey: "restoreSessionOnLaunch") as? Bool) ?? true
-        self.showKeyboardShortcutHelperOnBlank = (UserDefaults.standard.object(forKey: "showKeyboardShortcutHelperOnBlank") as? Bool) ?? true
-        self.developerExtrasEnabled    = (UserDefaults.standard.object(forKey: "developerExtrasEnabled") as? Bool) ?? true
-        self.googleSignInCompatibilityMode = (UserDefaults.standard.object(forKey: "googleSignInCompatibilityMode") as? Bool) ?? true
-        self.blockThirdPartyCookies    = (UserDefaults.standard.object(forKey: "blockThirdPartyCookies") as? Bool) ?? false
-        self.contentBlockingEnabled    = (UserDefaults.standard.object(forKey: "contentBlockingEnabled") as? Bool) ?? true
-        self.readerFontSize            = (UserDefaults.standard.object(forKey: "readerFontSize") as? Double) ?? 18.0
+        let ud = UserDefaults.standard
+        self.searchEngine          = SearchEngine(rawValue: ud.string(forKey: "searchEngine") ?? "") ?? .duckDuckGo
+        self.customSearchBaseURL   = ud.string(forKey: "customSearchBaseURL") ?? ""
+        self.newTabPage            = NewTabPage(rawValue: ud.string(forKey: "newTabPage") ?? "") ?? .blank
+        self.customNewTabURL       = ud.string(forKey: "customNewTabURL") ?? ""
+        self.backgroundTabDiscardLimit = (ud.object(forKey: "backgroundTabDiscardLimit") as? Int) ?? 8
+        self.restoreSessionOnLaunch    = (ud.object(forKey: "restoreSessionOnLaunch") as? Bool) ?? true
+        self.showKeyboardShortcutHelperOnBlank = (ud.object(forKey: "showKeyboardShortcutHelperOnBlank") as? Bool) ?? true
+        self.developerExtrasEnabled    = (ud.object(forKey: "developerExtrasEnabled") as? Bool) ?? true
+        self.googleSignInCompatibilityMode = (ud.object(forKey: "googleSignInCompatibilityMode") as? Bool) ?? true
+        self.blockThirdPartyCookies    = (ud.object(forKey: "blockThirdPartyCookies") as? Bool) ?? false
+        self.contentBlockingEnabled    = (ud.object(forKey: "contentBlockingEnabled") as? Bool) ?? true
+        self.readerFontSize            = (ud.object(forKey: "readerFontSize") as? Double) ?? 18.0
     }
 
     // MARK: - URL Resolution
