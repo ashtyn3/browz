@@ -80,6 +80,18 @@ struct BrowzApp: App {
                     .keyboardShortcut("\\", modifiers: [.command, .shift])
             }
 
+            CommandMenu("Workspaces") {
+                Button("Manage Workspaces…") { controller.presentWorkspaceManager() }
+                    .keyboardShortcut("w", modifiers: [.command, .option])
+
+                Divider()
+
+                Button("Next Workspace") { controller.workspaceStore.switchToNext() }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                Button("Previous Workspace") { controller.workspaceStore.switchToPrev() }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            }
+
             CommandMenu("Bookmarks") {
                 Button("Bookmark This Page") { controller.bookmarkCurrentTab() }
                     .keyboardShortcut("d", modifiers: .command)
@@ -117,6 +129,9 @@ final class BrowserController: ObservableObject {
     @Published var isFindBarVisible = false
     @Published var findQuery = ""
     @Published var findMatchFound: Bool? = nil
+
+    // Workspace manager sheet
+    @Published var isWorkspaceManagerPresented = false
 
     // Reader mode per-tab
     @Published var readerModeActiveTabIDs: Set<UUID> = []
@@ -163,6 +178,7 @@ final class BrowserController: ObservableObject {
 
         store.bootstrap(with: persistence.load())
         bindPersistence()
+        bindWorkspace()
         memoryManager.start()
 
         // Async: load content rule list and apply to registry
@@ -198,6 +214,14 @@ final class BrowserController: ObservableObject {
     }
 
     func dismissNavigationSurface() { store.isNavigationSurfacePresented = false }
+
+    func presentWorkspaceManager() {
+        isWorkspaceManagerPresented = true
+    }
+
+    func dismissWorkspaceManager() {
+        isWorkspaceManagerPresented = false
+    }
 
     func openSettings() {
         let settingsURL = InternalRoute.settings.urlString
@@ -401,6 +425,14 @@ final class BrowserController: ObservableObject {
             .sink { [weak self] _, _ in
                 guard let self else { return }
                 self.persistence.save(self.store.sessionSnapshot())
+            }
+            .store(in: &cancellables)
+    }
+
+    private func bindWorkspace() {
+        workspaceStore.$activeWorkspaceID
+            .sink { [weak self] id in
+                self?.store.activeWorkspaceID = id
             }
             .store(in: &cancellables)
     }

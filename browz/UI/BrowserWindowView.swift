@@ -18,7 +18,6 @@ struct BrowserWindowView: View {
     @State private var addressInput: String = ""
     @State private var selectedSuggestionIndex: Int? = nil
     @State private var isDownloadHUDVisible: Bool = false
-    @State private var showWorkspaceManager = false
     @FocusState private var isAddressFocused: Bool
 
     init(controller: BrowserController) {
@@ -57,13 +56,9 @@ struct BrowserWindowView: View {
             if store.isHistoryFinderPresented {
                 historyFinderOverlay
             }
-        }
-        .sheet(isPresented: $showWorkspaceManager) {
-            ZStack {
-                sheetTintFill
-                WorkspaceManagerView(store: workspaceStore, pageTint: store.activeTabPageTint)
+            if controller.isWorkspaceManagerPresented {
+                workspaceManagerOverlay
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onChange(of: store.selectedTabID) {
             addressInput = store.activeTab?.urlString ?? ""
@@ -79,7 +74,8 @@ struct BrowserWindowView: View {
             }
         }
         .onExitCommand {
-            if store.isHistoryFinderPresented { controller.dismissHistoryFinder() }
+            if controller.isWorkspaceManagerPresented { controller.dismissWorkspaceManager() }
+            else if store.isHistoryFinderPresented { controller.dismissHistoryFinder() }
             else if store.isFinderPresented { controller.dismissFinder() }
             else if store.isNavigationSurfacePresented { controller.dismissNavigationSurface() }
             else if controller.isFindBarVisible { controller.closeFindBar() }
@@ -109,6 +105,16 @@ struct BrowserWindowView: View {
             }
         )
         .frame(minWidth: 980, minHeight: 680)
+        .onChange(of: isAnyOverlayPresented) { _, overlayActive in
+            // Freeze / restore CSS :hover on every live page by toggling
+            // pointer-events on the document root. This is the only approach
+            // that reliably prevents hover bleed-through: AppKit routes
+            // mouseMoved to WKWebView's first-responder regardless of what
+            // SwiftUI layers are on top, but pointer-events:none makes the
+            // web content itself ignore the mouse position entirely.
+            controller.runtimeRegistry.setPointerEventsEnabled(!overlayActive)
+            if overlayActive { NSCursor.arrow.set() }
+        }
     }
 
     // MARK: - In-window finder overlays (liquid glass over tinted window)
@@ -172,6 +178,25 @@ struct BrowserWindowView: View {
         .animation(.easeOut(duration: 0.2), value: store.isFinderPresented)
     }
 
+    private var workspaceManagerOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.18)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { controller.dismissWorkspaceManager() }
+
+            WorkspaceManagerView(
+                store: workspaceStore,
+                pageTint: store.activeTabPageTint,
+                onDismiss: { controller.dismissWorkspaceManager() }
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .zIndex(5)
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.2), value: controller.isWorkspaceManagerPresented)
+    }
+
     private var historyFinderOverlay: some View {
         ZStack {
             Color.black.opacity(0.18)
@@ -199,6 +224,14 @@ struct BrowserWindowView: View {
     private var activeTab: TabState? { store.activeTab }
 
     private var activePageTint: PageTint? { store.activeTabPageTint }
+
+    /// True whenever any overlay floats above the web content.
+    private var isAnyOverlayPresented: Bool {
+        store.isNavigationSurfacePresented
+            || store.isFinderPresented
+            || store.isHistoryFinderPresented
+            || controller.isWorkspaceManagerPresented
+    }
 
     private var windowTintBackground: Color {
         guard let tint = activePageTint else {
@@ -391,12 +424,12 @@ struct BrowserWindowView: View {
                     ZStack {
                         VStack(spacing: 0) {
                             pageLoadingProgressBar(tabID: tab.id)
-                            WebViewContainer(
-                                tab: tab,
-                                runtimeRegistry: controller.runtimeRegistry,
-                                onNavigationUpdate: controller.navigationDidUpdate(tabID:title:url:)
-                            )
-                            if controller.isFindBarVisible {
+                        WebViewContainer(
+                            tab: tab,
+                            runtimeRegistry: controller.runtimeRegistry,
+                            onNavigationUpdate: controller.navigationDidUpdate(tabID:title:url:)
+                        )
+                        if controller.isFindBarVisible {
                                 FindBar(
                                     query: $controller.findQuery,
                                     matchFound: controller.findMatchFound,

@@ -2,143 +2,140 @@ import SwiftUI
 
 struct WorkspaceManagerView: View {
     @ObservedObject var store: WorkspaceStore
-    @Environment(\.dismiss) private var dismiss
+    let onDismiss: () -> Void
 
     @State private var newName = ""
     @State private var newEmoji = "🌐"
-    @State private var editingID: UUID? = nil
+    @FocusState private var isCreateFocused: Bool
 
     private let palette: FinderPalette
 
-    init(store: WorkspaceStore, pageTint: PageTint? = nil) {
+    init(store: WorkspaceStore, pageTint: PageTint? = nil, onDismiss: @escaping () -> Void = {}) {
         self.store = store
-        self._newName = State(initialValue: "")
-        self._newEmoji = State(initialValue: "🌐")
-        self._editingID = State(initialValue: nil)
+        self.onDismiss = onDismiss
         self.palette = FinderPalette.make(pageTint: pageTint)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             header
-            Divider()
             workspaceList
-            Divider()
-            createRow
+            Divider().overlay(palette.divider)
+            createSection
         }
-        .frame(width: 360)
-        .background(Color.white.opacity(0.80))
+        .frame(width: 380)
+        .background(palette.background.opacity(0.90))
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                .strokeBorder(palette.stroke, lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
-        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
+        .shadow(color: .black.opacity(0.12), radius: 32, y: 14)
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
+
+    // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Text("Workspaces")
-                .font(.system(size: 14, weight: .semibold))
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Workspaces")
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(palette.labelPrimary)
+                Text(store.workspaces.isEmpty
+                     ? "No workspaces yet"
+                     : "\(store.workspaces.count) workspace\(store.workspaces.count == 1 ? "" : "s")")
+                    .font(.system(size: 11))
+                    .foregroundStyle(palette.labelSecondary)
+            }
             Spacer()
-            Button { dismiss() } label: {
+            Button { onDismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(palette.labelSecondary)
-                    .frame(width: 20, height: 20)
-                    .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(palette.labelSecondary)
+                    .frame(width: 22, height: 22)
+                    .background(Color.black.opacity(0.06), in: Circle())
             }
             .buttonStyle(.plain)
+            .hoverElevated(cornerRadius: 11, baseOpacity: 0, hoverOpacity: 0.10)
         }
         .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 
+    // MARK: - List
+
     private var workspaceList: some View {
-        ScrollView {
-            VStack(spacing: 4) {
-                // "All Tabs" row
-                workspaceRow(
-                    id: nil, emoji: "⊞", name: "All Tabs",
-                    isActive: store.activeWorkspaceID == nil
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 2) {
+                WorkspaceRow(
+                    emoji: "⊞",
+                    name: "All Tabs",
+                    isActive: store.activeWorkspaceID == nil,
+                    canDelete: false,
+                    palette: palette,
+                    onSelect: { store.switchTo(nil); onDismiss() },
+                    onDelete: {}
                 )
+
+                if !store.workspaces.isEmpty {
+                    Divider()
+                        .overlay(palette.divider)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                }
+
                 ForEach(store.workspaces) { ws in
-                    workspaceRow(id: ws.id, emoji: ws.emoji, name: ws.name,
-                                 isActive: store.activeWorkspaceID == ws.id)
+                    WorkspaceRow(
+                        emoji: ws.emoji,
+                        name: ws.name,
+                        isActive: store.activeWorkspaceID == ws.id,
+                        canDelete: true,
+                        palette: palette,
+                        onSelect: { store.switchTo(ws.id); onDismiss() },
+                        onDelete: { store.delete(ws.id) }
+                    )
                 }
             }
-            .padding(8)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
         }
         .frame(maxHeight: 300)
     }
 
-    private func workspaceRow(id: UUID?, emoji: String, name: String, isActive: Bool) -> some View {
+    // MARK: - Create section
+
+    private var createSection: some View {
         HStack(spacing: 10) {
-            Text(emoji).font(.system(size: 16))
-                .frame(width: 30, height: 30)
-                .background(isActive ? Color.black.opacity(0.07) : palette.input,
-                             in: RoundedRectangle(cornerRadius: 8))
+            WorkspaceEmojiPicker(emoji: $newEmoji)
 
-            Text(name)
-                .font(.system(size: 13, weight: isActive ? .semibold : .regular))
-                .foregroundStyle(palette.labelPrimary)
-
-            Spacer()
-
-            if isActive {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            if let id {
-                Button {
-                    store.delete(id)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11))
-                        .foregroundStyle(palette.labelSecondary)
-                        .frame(width: 24, height: 24)
-                        .background(Color.black.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            isActive ? Color.black.opacity(0.04) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 10)
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            store.switchTo(id)
-            dismiss()
-        }
-    }
-
-    private var createRow: some View {
-        HStack(spacing: 8) {
-            TextField("＋ New workspace", text: $newName)
+            TextField("New workspace…", text: $newName)
                 .font(.system(size: 13))
                 .foregroundStyle(palette.labelPrimary)
                 .textFieldStyle(.plain)
+                .focused($isCreateFocused)
                 .onSubmit { createWorkspace() }
 
-            Spacer()
-
-            EmojiPicker(emoji: $newEmoji)
-
-            Button("Add") { createWorkspace() }
-                .font(.system(size: 12, weight: .semibold))
-                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+            if !newName.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button { createWorkspace() } label: {
+                    Image(systemName: "return")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 26, height: 26)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+            }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: newName.isEmpty)
     }
+
+    // MARK: - Actions
 
     private func createWorkspace() {
         let name = newName.trimmingCharacters(in: .whitespaces)
@@ -147,14 +144,95 @@ struct WorkspaceManagerView: View {
         store.switchTo(ws.id)
         newName = ""
         newEmoji = "🌐"
-        dismiss()
+        isCreateFocused = false
+        onDismiss()
     }
 }
 
-// Minimal inline emoji picker
-private struct EmojiPicker: View {
+// MARK: - Row
+
+private struct WorkspaceRow: View {
+    let emoji: String
+    let name: String
+    let isActive: Bool
+    let canDelete: Bool
+    let palette: FinderPalette
+    let onSelect: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Active indicator bar
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(isActive ? Color.accentColor : Color.clear)
+                .frame(width: 3, height: 22)
+                .padding(.trailing, 9)
+                .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isActive)
+
+            // Emoji bubble
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(isActive ? Color.accentColor.opacity(0.13) : palette.input)
+                    .frame(width: 34, height: 34)
+                    .animation(.easeOut(duration: 0.15), value: isActive)
+                Text(emoji).font(.system(size: 16))
+            }
+
+            // Name
+            Text(name)
+                .font(.system(size: 13, weight: isActive ? .medium : .regular))
+                .foregroundStyle(palette.labelPrimary)
+                .lineLimit(1)
+                .padding(.leading, 11)
+
+            Spacer()
+
+            // Active checkmark
+            if isActive {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.trailing, canDelete ? 8 : 0)
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            }
+
+            // Delete — only on hover
+            if canDelete && isHovered {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(palette.labelSecondary)
+                        .frame(width: 20, height: 20)
+                        .background(Color.black.opacity(0.07), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
+            }
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isActive
+                      ? Color.accentColor.opacity(0.07)
+                      : (isHovered ? palette.rowHover : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture { onSelect() }
+        .animation(.easeOut(duration: 0.11), value: isHovered)
+        .animation(.spring(response: 0.25, dampingFraction: 0.85), value: isActive)
+    }
+}
+
+// MARK: - Emoji picker
+
+private struct WorkspaceEmojiPicker: View {
     @Binding var emoji: String
-    private let options = ["🌐", "💼", "🏠", "📚", "🎮", "🎵", "🛒", "✈️", "🔬", "💡"]
+    private let options = ["🌐", "💼", "🏠", "📚", "🎮", "🎵", "🛒", "✈️", "🔬", "💡", "🎨", "🏋️", "🍕", "💻", "🔒"]
 
     var body: some View {
         Menu {
@@ -162,11 +240,12 @@ private struct EmojiPicker: View {
                 Button(e) { emoji = e }
             }
         } label: {
-            Text(emoji).font(.system(size: 16))
-                .frame(width: 30, height: 30)
-                .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+            Text(emoji)
+                .font(.system(size: 16))
+                .frame(width: 34, height: 34)
+                .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .menuStyle(.borderlessButton)
-        .frame(width: 36)
+        .frame(width: 34)
     }
 }
