@@ -37,7 +37,7 @@ struct BrowzApp: App {
                         hypothesisId: "H2_commands_not_firing_from_shortcuts"
                     )
                     // #endregion
-                    controller.newTab()
+                    controller.newTab(openNavigationSurface: true)
                 }
                     .keyboardShortcut("t", modifiers: .command)
                 Button("New Private Tab") { controller.newPrivateTab() }
@@ -284,7 +284,7 @@ final class BrowserController: ObservableObject {
         dismissFinder(); dismissNavigationSurface()
     }
 
-    func newTab(input: String? = nil) {
+    func newTab(input: String? = nil, openNavigationSurface: Bool = false) {
         let url: String
         if let input { url = input }
         else {
@@ -292,6 +292,10 @@ final class BrowserController: ObservableObject {
             url = (configured == "about:blank" || configured.isEmpty) ? "about:blank" : configured
         }
         _ = store.createTab(initialInput: url, select: true)
+
+        if openNavigationSurface {
+            presentNavigationSurface()
+        }
 
         // #region agent log
         agentDebugLog(
