@@ -27,6 +27,10 @@ struct TabFuzzyFinder: View {
     /// Optional callback to reorder tabs in the owning store.
     /// The first ID is the dragged tab, the second is the tab it should appear before.
     let onMoveTab: ((UUID, UUID) -> Void)?
+    /// The secondary split tab ID, if a split is currently active.
+    var splitTabID: UUID? = nil
+    /// Called with the ejected tab's ID when the user drags it out of the split group.
+    let onBreakSplit: ((UUID) -> Void)?
 
     private let palette: FinderPalette
 
@@ -38,9 +42,15 @@ struct TabFuzzyFinder: View {
     @State private var dragOrder: [UUID]? = nil
     @State private var reorderHoveredTabID: UUID? = nil
     @FocusState private var isFocused: Bool
+    /// Horizontal drag offset per split-tab row (for the eject gesture).
+    @State private var splitDragOffsets: [UUID: CGFloat] = [:]
+    /// The tab currently mid-eject (animating out).
+    @State private var splitEjectingID: UUID? = nil
 
     private static let notifNext = Notification.Name("browz.finder.selectNext")
     private static let notifPrev = Notification.Name("browz.finder.selectPrev")
+    /// Horizontal drag distance required to eject a split tab.
+    private static let ejectThreshold: CGFloat = 72
 
     init(
         tabs: [TabState],
@@ -53,7 +63,9 @@ struct TabFuzzyFinder: View {
         onTogglePin: @escaping (UUID) -> Void,
         onCreate: @escaping (String) -> Void,
         pageTint: PageTint? = nil,
-        onMoveTab: ((UUID, UUID) -> Void)? = nil
+        onMoveTab: ((UUID, UUID) -> Void)? = nil,
+        splitTabID: UUID? = nil,
+        onBreakSplit: ((UUID) -> Void)? = nil
     ) {
         self.tabs = tabs
         self.selectedTabID = selectedTabID
@@ -65,6 +77,8 @@ struct TabFuzzyFinder: View {
         self.onTogglePin = onTogglePin
         self.onCreate = onCreate
         self.onMoveTab = onMoveTab
+        self.splitTabID = splitTabID
+        self.onBreakSplit = onBreakSplit
         self.palette = FinderPalette.make(pageTint: pageTint)
     }
 
@@ -212,20 +226,45 @@ struct TabFuzzyFinder: View {
     private static let listMaxHeight: CGFloat = 460
 
     private var resultsList: some View {
-        let tabList   = rankedTabs
-        let rowCount  = tabList.isEmpty && !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : tabList.count
+        let trimmed   = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isSearching = !trimmed.isEmpty
+        let canReorder = !isSearching && onMoveTab != nil
+
+        // When query is empty and a split is active, separate the pair from the rest.
+        let showSplitCard = !isSearching && splitTabID != nil
+        let splitIDs: Set<UUID> = showSplitCard
+            ? [selectedTabID, splitTabID].compactMap { $0 }.reduce(into: Set()) { $0.insert($1) }
+            : []
+        let primaryTab   = showSplitCard ? tabs.first(where: { $0.id == selectedTabID }) : nil
+        let secondaryTab = showSplitCard ? tabs.first(where: { $0.id == splitTabID })    : nil
+
+        let flatList: [TabState] = {
+            let base = rankedTabs
+            if showSplitCard { return base.filter { !splitIDs.contains($0.id) } }
+            return base
+        }()
+
+        // Row count accounts for the split card (counts as 2 rows + extra padding).
+        let splitCardRows: Int = (primaryTab != nil || secondaryTab != nil) ? 3 : 0
+        let rowCount = (flatList.isEmpty && isSearching) ? 1 : flatList.count + splitCardRows
         let contentHeight = CGFloat(rowCount) * Self.rowHeight + Self.listVerticalPadding
         let listHeight = min(contentHeight, Self.listMaxHeight)
-        let canReorder = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && onMoveTab != nil
+
+        // Flat-list index offset so keyboard selectedIndex still works.
+        let indexOffset = splitCardRows
 
         return ScrollView {
             LazyVStack(spacing: 2) {
-                if !tabList.isEmpty {
-                    ForEach(Array(tabList.enumerated()), id: \.element.id) { i, tab in
-                        tabRow(tab, listIndex: i, canReorder: canReorder)
+                if let primary = primaryTab {
+                    splitPairCard(primary: primary, secondary: secondaryTab)
+                        .padding(.bottom, 4)
+                }
+                if !flatList.isEmpty {
+                    ForEach(Array(flatList.enumerated()), id: \.element.id) { i, tab in
+                        tabRow(tab, listIndex: i + indexOffset, canReorder: canReorder)
                     }
                 }
-                if tabList.isEmpty && !query.isEmpty {
+                if flatList.isEmpty && !query.isEmpty {
                     openURLRow
                 }
             }
@@ -345,6 +384,146 @@ struct TabFuzzyFinder: View {
         .contentShape(Rectangle())
         .onTapGesture { onCreate(query) }
         .hoverElevated(cornerRadius: 10, baseOpacity: 0.0, hoverOpacity: 0.10)
+    }
+
+    // MARK: - Split pair card
+
+    private func splitPairCard(primary: TabState, secondary: TabState?) -> some View {
+        VStack(spacing: 0) {
+            splitTabRow(primary)
+            if let secondary {
+                splitDivider
+                splitTabRow(secondary)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(accentBar.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(accentBar.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private var splitDivider: some View {
+        HStack(spacing: 8) {
+            Rectangle()
+                .fill(accentBar.opacity(0.15))
+                .frame(height: 1)
+
+            // Badge sits in the middle of the divider, not over any tab content
+            HStack(spacing: 3) {
+                Image(systemName: "rectangle.split.2x1")
+                    .font(.system(size: 9, weight: .semibold))
+                Text("Split")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(accentBar.opacity(0.50))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(accentBar.opacity(0.07))
+                    .overlay(Capsule().strokeBorder(accentBar.opacity(0.15), lineWidth: 0.5))
+            )
+            .fixedSize()
+
+            Rectangle()
+                .fill(accentBar.opacity(0.15))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+    }
+
+    private func splitTabRow(_ tab: TabState) -> some View {
+        let offset = splitDragOffsets[tab.id] ?? 0
+        let absOffset = abs(offset)
+        let isEjecting = splitEjectingID == tab.id
+        let isHov = hoveredTabID == tab.id
+        let isAct = tab.id == selectedTabID
+
+        return ZStack(alignment: .center) {
+            // "drag to break split" hint — fades in as the user drags
+            if absOffset > 6 {
+                Text("drag to break split")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(accentBar.opacity(min(Double(absOffset) / Double(Self.ejectThreshold), 0.55)))
+                    .allowsHitTesting(false)
+            }
+
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(isAct ? accentBar.opacity(0.10) : palette.input)
+                        .frame(width: 32, height: 32)
+                    Image(systemName: tab.isPrivate ? "shield.fill" : "globe")
+                        .font(.system(size: 13))
+                        .foregroundStyle(isAct ? accentBar : (tab.isPrivate ? privateColor.opacity(0.55) : palette.labelTertiary))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tab.title)
+                        .font(.system(size: 13, weight: isAct ? .semibold : .medium))
+                        .foregroundStyle(isAct ? accentBar : palette.labelPrimary)
+                        .lineLimit(1)
+                    Text(tab.urlString)
+                        .font(.system(size: 11))
+                        .foregroundStyle(palette.labelSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                if isHov {
+                    HStack(spacing: 4) {
+                        rowAction(icon: tab.isPinned ? "pin.slash" : "pin") { onTogglePin(tab.id) }
+                        rowAction(icon: "xmark") { onClose(tab.id) }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .offset(x: isEjecting ? (offset > 0 ? 320 : -320) : offset)
+        .rotationEffect(.degrees(Double(offset) * 0.04))
+        .scaleEffect(1.0 - min(absOffset / 600, 0.05))
+        .opacity(isEjecting ? 0 : 1)
+        .animation(isEjecting
+            ? .spring(response: 0.3, dampingFraction: 0.75)
+            : .interactiveSpring(response: 0.25, dampingFraction: 0.8),
+                   value: isEjecting ? 1.0 : Double(offset))
+        .onHover { over in
+            hoveredTabID = over ? tab.id : nil
+            if over { NSCursor.openHand.push() } else { NSCursor.pop() }
+        }
+        .onTapGesture { onSelect(tab.id) }
+        .gesture(
+            DragGesture(minimumDistance: 10, coordinateSpace: .local)
+                .onChanged { value in
+                    let dx = value.translation.width
+                    splitDragOffsets[tab.id] = dx
+                }
+                .onEnded { value in
+                    let dx = value.translation.width
+                    if abs(dx) >= Self.ejectThreshold {
+                        // Commit the eject: fly out then break.
+                        splitEjectingID = tab.id
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                            onBreakSplit?(tab.id)
+                            splitEjectingID = nil
+                            splitDragOffsets[tab.id] = nil
+                        }
+                    } else {
+                        // Snap back.
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+                            splitDragOffsets[tab.id] = nil
+                        }
+                    }
+                }
+        )
     }
 
     // MARK: - Tab row

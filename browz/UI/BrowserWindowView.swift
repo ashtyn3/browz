@@ -154,6 +154,14 @@ struct BrowserWindowView: View {
                     pageTint: store.activeTabPageTint,
                     onMoveTab: { sourceID, targetID in
                         controller.store.moveTab(sourceID, before: targetID)
+                    },
+                    splitTabID: store.splitTabID,
+                    onBreakSplit: { id in
+                        if id == store.selectedTabID {
+                            controller.store.closeSplitSide(.primary)
+                        } else {
+                            controller.store.closeSplitSide(.secondary)
+                        }
                     }
                 )
             }
