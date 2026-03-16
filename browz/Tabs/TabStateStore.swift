@@ -83,6 +83,7 @@ final class TabStateStore: ObservableObject {
 
     func closeTab(_ id: UUID) {
         if splitTabID == id { splitTabID = nil }
+        let closedIndex = tabs.firstIndex(where: { $0.id == id })
         tabs.removeAll(where: { $0.id == id })
         guard !tabs.isEmpty else {
             let replacement = TabState()
@@ -91,8 +92,10 @@ final class TabStateStore: ObservableObject {
             return
         }
 
-        if selectedTabID == id {
-            selectedTabID = tabs.first?.id
+        if selectedTabID == id, let idx = closedIndex {
+            // Select the next neighboring tab: same index (now the tab that was after) or last if we closed the last tab.
+            let nextIndex = min(idx, tabs.count - 1)
+            selectedTabID = tabs[nextIndex].id
             if let selectedTabID {
                 markTabAsActive(selectedTabID)
             }

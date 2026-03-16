@@ -151,7 +151,21 @@ struct TabFuzzyFinder: View {
         .shadow(color: .black.opacity(0.10), radius: 30, y: 12)
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
         .onAppear {
-            if !allItems.isEmpty { selectedIndex = 0 }
+            if !allItems.isEmpty {
+                // Start selection on the current tab so Ctrl+N / Ctrl+P first move is relative to it.
+                let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.isEmpty {
+                    if splitTabID != nil {
+                        selectedIndex = 3 // first row of flatList (after split card)
+                    } else if let idx = rankedTabs.firstIndex(where: { $0.id == selectedTabID }) {
+                        selectedIndex = idx
+                    } else {
+                        selectedIndex = 0
+                    }
+                } else {
+                    selectedIndex = 0
+                }
+            }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
                 let ctrl = event.modifierFlags.contains(.control)
                 let plain = event.modifierFlags.intersection([.shift, .option, .command, .control]).isEmpty
