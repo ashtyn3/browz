@@ -46,6 +46,12 @@ final class TabRuntimeRegistry {
             configuration.userContentController.addUserScript(GeolocationBridge.userScript)
         }
 
+        let vimiumBridge = VimiumBridge { [weak self] url in
+            self?.onOpenNewTabRequest?(url)
+        }
+        configuration.userContentController.add(vimiumBridge, name: VimiumBridge.messageHandlerName)
+        configuration.userContentController.addUserScript(VimiumBridge.userScript)
+
         // Nudge sites (notably Google) to serve modern layouts without fully
         // spoofing another browser's user agent. We append a Safari-style token
         // while still letting WebKit generate the base UA string, so capability

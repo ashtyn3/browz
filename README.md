@@ -65,6 +65,13 @@ The app is fully sandboxed. The entitlements are declared in
   - `⇧⌘R` — Toggle reader mode
   - `⇧⌘\` — Toggle split view
   - `⌘,` — Open settings
+- **Vim-style (when focus is in the page, not in an input)**
+  - `j` / `k` — Scroll down / up
+  - `d` / `u` — Half page down / up
+  - `gg` / `G` — Scroll to top / bottom
+  - `f` — Show link hints, then type hint to click
+  - `F` — Show link hints, then type hint to open in new tab
+  - `H` / `L` — Back / forward
 
 (See the `BrowzApp` command menus and `BrowserWindowView` for the authoritative
 list.)
