@@ -59,7 +59,6 @@ struct FindBar: View {
         )
         .shadow(color: .black.opacity(0.08), radius: 12, y: -4)
         .onAppear { isFocused = true }
-        .onChange(of: query) { if query.isEmpty { } }
     }
 
     private func findBtn(icon: String, action: @escaping () -> Void) -> some View {

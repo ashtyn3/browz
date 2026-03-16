@@ -154,14 +154,14 @@ final class TabRuntimeRegistry {
 
     func zoomIn(tabID: UUID) -> Double {
         let cur = zoomLevel(for: tabID)
-        let next = Self.zoomSteps.first { $0 > cur + 0.001 } ?? Self.zoomSteps.last!
+        let next = Self.zoomSteps.first { $0 > cur + 0.001 } ?? Self.zoomSteps.last ?? cur
         setZoom(next, for: tabID)
         return next
     }
 
     func zoomOut(tabID: UUID) -> Double {
         let cur = zoomLevel(for: tabID)
-        let prev = Self.zoomSteps.last { $0 < cur - 0.001 } ?? Self.zoomSteps.first!
+        let prev = Self.zoomSteps.last { $0 < cur - 0.001 } ?? Self.zoomSteps.first ?? cur
         setZoom(prev, for: tabID)
         return prev
     }
@@ -522,7 +522,9 @@ extension WebViewNavigationRelay: WKUIDelegate {
         type: WKMediaCaptureType,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
+#if DEBUG
         print("[Permission] 🎤 Media capture delegate called: \(origin.host), type: \(type.rawValue), handlerNil: \(onPermissionRequest == nil)")
+#endif
         guard let handler = onPermissionRequest else { decisionHandler(.deny); return }
         let permissionType: PermissionType
         switch type {
@@ -535,7 +537,9 @@ extension WebViewNavigationRelay: WKUIDelegate {
             host: origin.host,
             type: permissionType,
             decision: { allowed in
+#if DEBUG
                 print("[Permission] 🎤 Decision called: allowed=\(allowed)")
+#endif
                 decisionHandler(allowed ? .grant : .deny)
             }
         ))
@@ -547,13 +551,17 @@ extension WebViewNavigationRelay: WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo,
         decisionHandler: @escaping (WKPermissionDecision) -> Void
     ) {
+#if DEBUG
         print("[Permission] 📍 Geolocation delegate called: \(origin.host), handlerNil: \(onPermissionRequest == nil)")
+#endif
         guard let handler = onPermissionRequest else { decisionHandler(.deny); return }
         handler(PermissionRequest(
             host: origin.host,
             type: .location,
             decision: { allowed in
+#if DEBUG
                 print("[Permission] 📍 Decision called: allowed=\(allowed)")
+#endif
                 decisionHandler(allowed ? .grant : .deny)
             }
         ))

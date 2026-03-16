@@ -31,6 +31,10 @@ struct DownloadHUD: View {
         .onChange(of: coordinator.items.map(\.isTerminal)) { _, terminals in
             scheduleAutoDismissIfNeeded(terminals: terminals)
         }
+        .onDisappear {
+            autoDismissTask?.cancel()
+            autoDismissTask = nil
+        }
     }
 
     private var header: some View {

@@ -42,10 +42,14 @@ final class PermissionPresenter: ObservableObject {
     @Published var request: PermissionRequest?
 
     func present(_ request: PermissionRequest) {
+#if DEBUG
         print("[Permission] 🪟 PermissionPresenter.present() called for \(request.host)")
+#endif
         dismissCurrent(allowed: false)
         self.request = request
+#if DEBUG
         print("[Permission] 🪟 self.request is now \(self.request == nil ? "nil" : "set")")
+#endif
     }
 
     func dismissCurrent(allowed: Bool) {
