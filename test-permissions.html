@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Permission Test</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 60px auto; padding: 0 20px; }
+    button { font-size: 16px; padding: 10px 20px; margin: 8px 4px; border-radius: 8px; border: none; cursor: pointer; background: #1a1a1a; color: #fff; }
+    button:hover { background: #333; }
+    #result { margin-top: 20px; padding: 16px; background: #f5f5f5; border-radius: 8px; font-size: 14px; white-space: pre-wrap; min-height: 40px; }
+  </style>
+</head>
+<body>
+  <h2>Permission Test</h2>
+
+  <button onclick="testLocation()">📍 Request Location</button>
+  <button onclick="testCamera()">🎥 Request Camera</button>
+  <button onclick="testMic()">🎤 Request Microphone</button>
+
+  <div id="result">Tap a button above…</div>
+
+  <script>
+    const out = document.getElementById('result');
+
+    function testLocation() {
+      out.textContent = 'Requesting location…';
+      navigator.geolocation.getCurrentPosition(
+        p => out.textContent = 'Location: ' + p.coords.latitude.toFixed(5) + ', ' + p.coords.longitude.toFixed(5),
+        e => out.textContent = 'Error: ' + e.message + ' (code ' + e.code + ')'
+      );
+    }
+
+    function testCamera() {
+      out.textContent = 'Requesting camera…';
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => { out.textContent = 'Camera granted ✓'; s.getTracks().forEach(t => t.stop()); })
+        .catch(e => out.textContent = 'Error: ' + e.message);
+    }
+
+    function testMic() {
+      out.textContent = 'Requesting microphone…';
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(s => { out.textContent = 'Microphone granted ✓'; s.getTracks().forEach(t => t.stop()); })
+        .catch(e => out.textContent = 'Error: ' + e.message);
+    }
+  </script>
+</body>
+</html>

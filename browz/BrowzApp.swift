@@ -1,4 +1,5 @@
 import Combine
+import CoreLocation
 import SwiftUI
 import WebKit
 
@@ -19,18 +20,73 @@ struct BrowzApp: App {
                 }
         }
         .commands {
-            CommandMenu("Tabs") {
-                Button("Find Tab") { controller.presentFinder() }
-                    .keyboardShortcut("k", modifiers: .command)
+            // File menu: tab lifecycle
+            CommandGroup(after: .newItem) {
                 Button("New Tab") { controller.newTab(openNavigationSurface: true) }
                     .keyboardShortcut("t", modifiers: .command)
                 Button("New Private Tab") { controller.newPrivateTab() }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Find Tab") { controller.presentFinder() }
+                    .keyboardShortcut("k", modifiers: .command)
                 Button("Close Tab") { controller.closeSelectedTab() }
                     .keyboardShortcut("w", modifiers: .command)
                 Button("Reopen Last Closed Tab") { controller.reopenLastClosedTab() }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
+            }
 
+            // View menu: page display and navigation controls
+            CommandGroup(after: .toolbar) {
+                Button("Open Address Bar") { controller.presentNavigationSurface() }
+                    .keyboardShortcut("l", modifiers: .command)
+                Button("Find in Page") { controller.toggleFindBar() }
+                    .keyboardShortcut("f", modifiers: .command)
+
+                Divider()
+
+                Button("Reload") { controller.reload() }
+                    .keyboardShortcut("r", modifiers: .command)
+
+                Divider()
+
+                Button("Zoom In") { controller.zoomIn() }
+                    .keyboardShortcut("=", modifiers: .command)
+                Button("Zoom Out") { controller.zoomOut() }
+                    .keyboardShortcut("-", modifiers: .command)
+                Button("Actual Size") { controller.resetZoom() }
+                    .keyboardShortcut("0", modifiers: .command)
+
+                Divider()
+
+                Button("Toggle Reader Mode") { controller.toggleReaderMode() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Toggle Split View") { controller.toggleSplitView() }
+                    .keyboardShortcut("\\", modifiers: [.command, .shift])
+            }
+
+            // History menu: page navigation + history search
+            CommandMenu("History") {
+                Button("Back") { controller.goBack() }
+                    .keyboardShortcut("[", modifiers: .command)
+                Button("Forward") { controller.goForward() }
+                    .keyboardShortcut("]", modifiers: .command)
+
+                Divider()
+
+                Button("Search History…") { controller.presentHistoryFinder() }
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+            }
+
+            // Bookmarks menu
+            CommandMenu("Bookmarks") {
+                Button("Bookmark This Page") { controller.bookmarkCurrentTab() }
+                    .keyboardShortcut("d", modifiers: .command)
+            }
+
+            // Window menu: tab and workspace switching
+            CommandGroup(after: .windowArrangement) {
                 Divider()
 
                 Button("Select Next Tab") { controller.selectNextTab() }
@@ -44,64 +100,18 @@ struct BrowzApp: App {
                     Button("Tab \(i)") { controller.selectTabAtIndex(i - 1) }
                         .keyboardShortcut(KeyEquivalent(Character("\(i)")), modifiers: .command)
                 }
-            }
-
-            CommandMenu("Navigation") {
-                Button("Open Address Bar") { controller.presentNavigationSurface() }
-                    .keyboardShortcut("l", modifiers: .command)
-                Button("Hide Address Bar") { controller.dismissNavigationSurface() }
-                    .keyboardShortcut(.escape, modifiers: [])
-                Button("Find in Page") { controller.toggleFindBar() }
-                    .keyboardShortcut("f", modifiers: .command)
 
                 Divider()
 
-                Button("Back")    { controller.goBack() }
-                    .keyboardShortcut("[", modifiers: .command)
-                Button("Forward") { controller.goForward() }
-                    .keyboardShortcut("]", modifiers: .command)
-                Button("Reload")  { controller.reload() }
-                    .keyboardShortcut("r", modifiers: .command)
-
-                Divider()
-
-                Button("Zoom In")    { controller.zoomIn() }
-                    .keyboardShortcut("=", modifiers: .command)
-                Button("Zoom Out")   { controller.zoomOut() }
-                    .keyboardShortcut("-", modifiers: .command)
-                Button("Actual Size") { controller.resetZoom() }
-                    .keyboardShortcut("0", modifiers: .command)
-
-                Divider()
-
-                Button("Toggle Reader Mode") { controller.toggleReaderMode() }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                Button("Toggle Split View") { controller.toggleSplitView() }
-                    .keyboardShortcut("\\", modifiers: [.command, .shift])
-            }
-
-            CommandMenu("Workspaces") {
                 Button("Manage Workspaces…") { controller.presentWorkspaceManager() }
                     .keyboardShortcut("w", modifiers: [.command, .option])
-
-                Divider()
-
                 Button("Next Workspace") { controller.workspaceStore.switchToNext() }
                     .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
                 Button("Previous Workspace") { controller.workspaceStore.switchToPrev() }
                     .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
             }
 
-            CommandMenu("Bookmarks") {
-                Button("Bookmark This Page") { controller.bookmarkCurrentTab() }
-                    .keyboardShortcut("d", modifiers: .command)
-            }
-
-            CommandMenu("History") {
-                Button("Search History…") { controller.presentHistoryFinder() }
-                    .keyboardShortcut("h", modifiers: [.command, .shift])
-            }
-
+            // App menu: settings
             CommandGroup(replacing: .appSettings) {
                 Button("Settings") { controller.openSettings() }
                     .keyboardShortcut(",", modifiers: .command)
@@ -121,6 +131,10 @@ final class BrowserController: ObservableObject {
     let workspaceStore: WorkspaceStore
     let downloadCoordinator: DownloadCoordinator
     let dialogPresenter: JSDialogPresenter
+    let permissionPresenter: PermissionPresenter
+    private let geolocationBridge = GeolocationBridge()
+    private let locationPermissionStore = LocationPermissionStore()
+    private let locationManager = CLLocationManager()
     private let persistence: TabSessionPersistence
     private let memoryManager: TabMemoryManager
     private var cancellables: Set<AnyCancellable> = []
@@ -145,6 +159,7 @@ final class BrowserController: ObservableObject {
         let workspaceStore = WorkspaceStore()
         let downloadCoordinator = DownloadCoordinator()
         let dialogPresenter = JSDialogPresenter()
+        let permissionPresenter = PermissionPresenter()
 
         self.store = store
         self.runtimeRegistry = runtimeRegistry
@@ -154,6 +169,7 @@ final class BrowserController: ObservableObject {
         self.workspaceStore = workspaceStore
         self.downloadCoordinator = downloadCoordinator
         self.dialogPresenter = dialogPresenter
+        self.permissionPresenter = permissionPresenter
         self.memoryManager = TabMemoryManager(store: store, runtimeRegistry: runtimeRegistry)
 
         runtimeRegistry.onOpenNewTabRequest = { [weak self] url in
@@ -171,9 +187,32 @@ final class BrowserController: ObservableObject {
         runtimeRegistry.onDialogRequest = { [weak dialogPresenter] request in
             dialogPresenter?.present(request)
         }
+        runtimeRegistry.onPermissionRequest = { [weak permissionPresenter] request in
+            permissionPresenter?.present(request)
+        }
+        geolocationBridge.setResolvePermission { [weak permissionPresenter, weak self] host, completion in
+            guard let self else { completion(false); return }
+            let hostKey = (host == "this page" ? "" : host)
+            if let stored = self.locationPermissionStore.get(host: hostKey) {
+                completion(stored)
+                return
+            }
+            permissionPresenter?.present(PermissionRequest(host: host, type: .location, decision: { [weak self] allowed in
+                self?.locationPermissionStore.set(host: hostKey, allowed: allowed)
+                completion(allowed)
+            }))
+        }
+        runtimeRegistry.geolocationBridge = geolocationBridge
         runtimeRegistry.onPageTintChange = { [weak self] tabID, tint in
             // If sampling fails, keep the UI neutral by clearing the tint.
             self?.store.setPageTint(tint, for: tabID)
+        }
+
+        // Request CoreLocation authorization so WebKit will invoke the
+        // geolocation delegate when websites call navigator.geolocation.
+        // macOS silently skips the delegate until the app is authorized.
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
         }
 
         store.bootstrap(with: persistence.load())

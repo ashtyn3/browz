@@ -10,6 +10,9 @@ final class TabRuntimeRegistry {
     var onProgressChange: ((UUID, Double) -> Void)?
     var onDownloadStarted: ((WKDownload) -> Void)?
     var onDialogRequest: ((JSDialogRequest) -> Void)?
+    var onPermissionRequest: ((PermissionRequest) -> Void)?
+    /// If set, navigator.geolocation is bridged to this; sites get location via app's CLLocationManager.
+    var geolocationBridge: GeolocationBridge?
     /// Called when a new page-derived tint is available for a tab.
     var onPageTintChange: ((UUID, PageTint?) -> Void)?
     /// Set once after async compilation; applied to all subsequently created webviews.
@@ -38,6 +41,11 @@ final class TabRuntimeRegistry {
             forKey: "developerExtrasEnabled"
         )
 
+        if let bridge = geolocationBridge {
+            configuration.userContentController.add(bridge, name: GeolocationBridge.messageHandlerName)
+            configuration.userContentController.addUserScript(GeolocationBridge.userScript)
+        }
+
         // Nudge sites (notably Google) to serve modern layouts without fully
         // spoofing another browser's user agent. We append a Safari-style token
         // while still letting WebKit generate the base UA string, so capability
@@ -57,6 +65,7 @@ final class TabRuntimeRegistry {
             onProgressChange: onProgressChange,
             onDownloadStarted: onDownloadStarted,
             onDialogRequest: onDialogRequest,
+            onPermissionRequest: onPermissionRequest,
             onPageTintChange: onPageTintChange
         )
         webView.navigationDelegate = relay
@@ -212,6 +221,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
     private let onProgressChange: ((UUID, Double) -> Void)?
     private let onDownloadStarted: ((WKDownload) -> Void)?
     private let onDialogRequest: ((JSDialogRequest) -> Void)?
+    private let onPermissionRequest: ((PermissionRequest) -> Void)?
     private var progressObservation: NSKeyValueObservation?
     private let onPageTintChange: ((UUID, PageTint?) -> Void)?
 
@@ -223,6 +233,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         onProgressChange: ((UUID, Double) -> Void)?,
         onDownloadStarted: ((WKDownload) -> Void)?,
         onDialogRequest: ((JSDialogRequest) -> Void)?,
+        onPermissionRequest: ((PermissionRequest) -> Void)?,
         onPageTintChange: ((UUID, PageTint?) -> Void)?
     ) {
         self.tabID = tabID
@@ -232,6 +243,7 @@ final class WebViewNavigationRelay: NSObject, WKNavigationDelegate {
         self.onProgressChange = onProgressChange
         self.onDownloadStarted = onDownloadStarted
         self.onDialogRequest = onDialogRequest
+        self.onPermissionRequest = onPermissionRequest
         self.onPageTintChange = onPageTintChange
         super.init()
     }
@@ -500,6 +512,50 @@ extension WebViewNavigationRelay: WKUIDelegate {
             message: prompt,
             source: source,
             kind: .prompt(defaultText: defaultText, completion: completionHandler)
+        ))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        print("[Permission] 🎤 Media capture delegate called: \(origin.host), type: \(type.rawValue), handlerNil: \(onPermissionRequest == nil)")
+        guard let handler = onPermissionRequest else { decisionHandler(.deny); return }
+        let permissionType: PermissionType
+        switch type {
+        case .camera:              permissionType = .camera
+        case .microphone:          permissionType = .microphone
+        case .cameraAndMicrophone: permissionType = .cameraAndMicrophone
+        @unknown default:          permissionType = .camera
+        }
+        handler(PermissionRequest(
+            host: origin.host,
+            type: permissionType,
+            decision: { allowed in
+                print("[Permission] 🎤 Decision called: allowed=\(allowed)")
+                decisionHandler(allowed ? .grant : .deny)
+            }
+        ))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        requestGeolocationPermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        print("[Permission] 📍 Geolocation delegate called: \(origin.host), handlerNil: \(onPermissionRequest == nil)")
+        guard let handler = onPermissionRequest else { decisionHandler(.deny); return }
+        handler(PermissionRequest(
+            host: origin.host,
+            type: .location,
+            decision: { allowed in
+                print("[Permission] 📍 Decision called: allowed=\(allowed)")
+                decisionHandler(allowed ? .grant : .deny)
+            }
         ))
     }
 }

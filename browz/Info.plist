@@ -5,14 +5,14 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>land.ashtyn.browz.internal</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>browz</string>
 			</array>
-			<key>CFBundleURLName</key>
-			<string>land.ashtyn.browz.internal</string>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
 		</dict>
 	</array>
 </dict>

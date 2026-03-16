@@ -11,6 +11,7 @@ struct BrowserWindowView: View {
     @ObservedObject private var store: TabStateStore
     @ObservedObject private var downloadCoordinator: DownloadCoordinator
     @ObservedObject private var dialogPresenter: JSDialogPresenter
+    @ObservedObject private var permissionPresenter: PermissionPresenter
     @ObservedObject private var bookmarkStore: BookmarkStore
     @ObservedObject private var workspaceStore: WorkspaceStore
     @ObservedObject private var settings = BrowserSettings.shared
@@ -25,6 +26,7 @@ struct BrowserWindowView: View {
         _store = ObservedObject(initialValue: controller.store)
         _downloadCoordinator = ObservedObject(initialValue: controller.downloadCoordinator)
         _dialogPresenter = ObservedObject(initialValue: controller.dialogPresenter)
+        _permissionPresenter = ObservedObject(initialValue: controller.permissionPresenter)
         _bookmarkStore = ObservedObject(initialValue: controller.bookmarkStore)
         _workspaceStore = ObservedObject(initialValue: controller.workspaceStore)
         _addressInput = State(initialValue: controller.selectedTab?.urlString ?? "")
@@ -95,6 +97,7 @@ struct BrowserWindowView: View {
         }
         .overlay {
             JSDialogOverlay(presenter: dialogPresenter).zIndex(100)
+            PermissionOverlay(presenter: permissionPresenter).zIndex(101)
         }
         .background(windowTintBackground)
         .background(.ultraThinMaterial)

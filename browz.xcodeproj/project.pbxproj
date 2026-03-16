@@ -293,7 +293,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = browz/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Browz;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Websites you visit can request camera access.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Websites you visit can request your location.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Websites you visit can request microphone access.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -341,7 +344,10 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = browz/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Browz;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Websites you visit can request camera access.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Websites you visit can request your location.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Websites you visit can request microphone access.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
