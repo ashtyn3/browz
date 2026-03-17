@@ -163,11 +163,27 @@ final class TabStateStore: ObservableObject {
         }
     }
 
-    func discardCandidates(excluding protectedIDs: Set<UUID>, maxCount: Int) -> [UUID] {
+    /// Returns up to `maxCount` tab IDs that are safe to discard from memory.
+    /// Optionally restricts candidates to tabs that have been inactive for at
+    /// least `minAgeSeconds` seconds.
+    func discardCandidates(
+        excluding protectedIDs: Set<UUID>,
+        maxCount: Int,
+        minAgeSeconds: TimeInterval? = nil
+    ) -> [UUID] {
         guard maxCount > 0 else { return [] }
-        let sorted = tabs
-            .filter { !protectedIDs.contains($0.id) && !$0.isPinned }
-            .sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt })
+
+        let cutoffDate: Date? = minAgeSeconds.map { .now.addingTimeInterval(-$0) }
+
+        let eligible = tabs.filter { tab in
+            guard !protectedIDs.contains(tab.id), !tab.isPinned else { return false }
+            if let cutoffDate {
+                return tab.lastAccessedAt < cutoffDate
+            }
+            return true
+        }
+
+        let sorted = eligible.sorted(by: { $0.lastAccessedAt < $1.lastAccessedAt })
         return Array(sorted.prefix(maxCount).map(\.id))
     }
 
