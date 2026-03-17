@@ -480,6 +480,27 @@ extension WebViewNavigationRelay: WKUIDelegate {
 
     func webView(
         _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.resolvesAliases = true
+
+        panel.begin { response in
+            guard response == .OK else {
+                completionHandler(nil)
+                return
+            }
+            completionHandler(panel.urls)
+        }
+    }
+
+    func webView(
+        _ webView: WKWebView,
         runJavaScriptAlertPanelWithMessage message: String,
         initiatedByFrame frame: WKFrameInfo,
         completionHandler: @escaping () -> Void
