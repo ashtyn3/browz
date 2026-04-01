@@ -3,6 +3,10 @@ import CoreLocation
 import SwiftUI
 import WebKit
 
+extension Notification.Name {
+    static let browzSidebarVisibilityChanged = Notification.Name("browzSidebarVisibilityChanged")
+}
+
 @main
 struct BrowzApp: App {
     @StateObject private var controller = BrowserController()
@@ -19,6 +23,7 @@ struct BrowzApp: App {
                     // Add more routes here as you extend InternalRoute.
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             // File menu: tab lifecycle
             CommandGroup(after: .newItem) {
@@ -64,6 +69,8 @@ struct BrowzApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Toggle Split View") { controller.toggleSplitView() }
                     .keyboardShortcut("\\", modifiers: [.command, .shift])
+                Button("Toggle Tab Sidebar") { controller.toggleTabSidebarVisibility() }
+                    .keyboardShortcut("s", modifiers: .command)
             }
 
             // History menu: page navigation + history search
@@ -404,6 +411,25 @@ final class BrowserController: ObservableObject {
             runtimeRegistry.activateReaderMode(tabID: id)
             readerModeActiveTabIDs.insert(id)
         }
+    }
+
+    // MARK: - Tab sidebar
+
+    func toggleTabSidebarVisibility() {
+        let settings = BrowserSettings.shared
+        guard settings.showTabSidebar else { return }
+        // Ignore the shortcut while high-focus overlays are active so it
+        // doesn't accidentally fire while using the finder or sheets.
+        guard !store.isNavigationSurfacePresented,
+              !store.isFinderPresented,
+              !store.isHistoryFinderPresented,
+              !isWorkspaceManagerPresented else { return }
+        store.isTabSidebarVisible.toggle()
+        NotificationCenter.default.post(
+            name: .browzSidebarVisibilityChanged,
+            object: nil,
+            userInfo: ["visible": store.isTabSidebarVisible]
+        )
     }
 
     // MARK: - Bookmarks

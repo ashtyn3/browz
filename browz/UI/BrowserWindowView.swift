@@ -34,8 +34,26 @@ struct BrowserWindowView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            contentArea
-                .padding(10)
+            HStack(spacing: 0) {
+                if settings.showTabSidebar {
+                    if store.isTabSidebarVisible {
+                        TabSidebarView(
+                            tabs: store.visibleTabs,
+                            selectedTabID: store.selectedTabID,
+                            splitTabID: store.splitTabID,
+                            onSelect: { controller.selectTab($0) },
+                            onClose: { controller.closeTab($0) },
+                            onTogglePin: { controller.togglePin($0) }
+                        )
+                        .transition(.move(edge: .leading))
+                    }
+                }
+
+                contentArea
+                    .padding(20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .animation(.spring(duration: 0.22), value: store.isTabSidebarVisible)
 
             if store.isNavigationSurfacePresented {
                 navigationSurface
@@ -62,6 +80,7 @@ struct BrowserWindowView: View {
                 workspaceManagerOverlay
             }
         }
+        .ignoresSafeArea(edges: .top)
         .onChange(of: store.selectedTabID) {
             addressInput = store.activeTab?.urlString ?? ""
         }
@@ -99,8 +118,8 @@ struct BrowserWindowView: View {
             JSDialogOverlay(presenter: dialogPresenter).zIndex(100)
             PermissionOverlay(presenter: permissionPresenter).zIndex(101)
         }
-        .background(windowTintBackground)
-        .background(.ultraThinMaterial)
+        .background(windowTintBackground.ignoresSafeArea())
+        .background(.ultraThinMaterial, ignoresSafeAreaEdges: .all)
         .background(
             WindowCloseInterceptor {
                 controller.closeSelectedTab()
@@ -613,4 +632,3 @@ private extension View {
             .shadow(color: .black.opacity(0.08), radius: 12, y: 4)
     }
 }
-

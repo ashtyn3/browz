@@ -8,6 +8,8 @@ final class TabStateStore: ObservableObject {
     @Published var isFinderPresented: Bool = false
     @Published var isHistoryFinderPresented: Bool = false
     @Published var isNavigationSurfacePresented: Bool = false
+    /// Per-window visibility for the Zen-style tab sidebar.
+    @Published var isTabSidebarVisible: Bool = true
     @Published private(set) var loadingTabIDs: Set<UUID> = []
     @Published private(set) var tabProgress: [UUID: Double] = [:]
     @Published private(set) var tabZoom: [UUID: Double] = [:]

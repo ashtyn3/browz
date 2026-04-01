@@ -74,6 +74,9 @@ final class BrowserSettings: ObservableObject {
     @Published var showKeyboardShortcutHelperOnBlank: Bool {
         didSet { persist("showKeyboardShortcutHelperOnBlank", showKeyboardShortcutHelperOnBlank) }
     }
+    @Published var showTabSidebar: Bool {
+        didSet { persist("showTabSidebar", showTabSidebar) }
+    }
     @Published var developerExtrasEnabled: Bool {
         didSet { persist("developerExtrasEnabled", developerExtrasEnabled) }
     }
@@ -101,6 +104,7 @@ final class BrowserSettings: ObservableObject {
         self.backgroundTabDiscardLimit = (ud.object(forKey: "backgroundTabDiscardLimit") as? Int) ?? 8
         self.restoreSessionOnLaunch    = (ud.object(forKey: "restoreSessionOnLaunch") as? Bool) ?? true
         self.showKeyboardShortcutHelperOnBlank = (ud.object(forKey: "showKeyboardShortcutHelperOnBlank") as? Bool) ?? true
+        self.showTabSidebar              = (ud.object(forKey: "showTabSidebar") as? Bool) ?? true
         self.developerExtrasEnabled    = (ud.object(forKey: "developerExtrasEnabled") as? Bool) ?? true
         self.googleSignInCompatibilityMode = (ud.object(forKey: "googleSignInCompatibilityMode") as? Bool) ?? true
         self.blockThirdPartyCookies    = (ud.object(forKey: "blockThirdPartyCookies") as? Bool) ?? false

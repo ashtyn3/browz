@@ -191,6 +191,12 @@ struct TabsSettingsPane: View {
             } header: {
                 Text("Memory Management")
             }
+
+            Section {
+                Toggle("Show tab sidebar", isOn: $settings.showTabSidebar)
+            } header: {
+                Text("Layout")
+            }
         }
         .formStyle(.grouped)
     }
